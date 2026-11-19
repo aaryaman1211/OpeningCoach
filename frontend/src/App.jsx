@@ -1,198 +1,128 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from './api.js'
+import { api, pct } from './api.js'
+import { applyTheme, initialTheme } from './theme.js'
 import ImportPanel from './components/ImportPanel.jsx'
+import StartScreen from './components/StartScreen.jsx'
 import Explorer from './components/Explorer.jsx'
 import WeakLines from './components/WeakLines.jsx'
 import OutOfBook from './components/OutOfBook.jsx'
 import StudyPlan from './components/StudyPlan.jsx'
 import Scout from './components/Scout.jsx'
 import UnderTheHood from './components/UnderTheHood.jsx'
-import LineReplay from './components/LineReplay.jsx'
-import ScoreBar from './components/ScoreBar.jsx'
 
 const TABS = [
-  { id: 'explore', label: 'Board', icon: '♞' },
-  { id: 'weak', label: 'Weak lines', icon: '⚠' },
-  { id: 'book', label: 'Leaving theory', icon: '⤳' },
-  { id: 'plan', label: 'Study plan', icon: '✎' },
-  { id: 'scout', label: 'Scout opponent', icon: '⚔' },
-  { id: 'hood', label: 'Under the hood', icon: '⚙' },
-]
-
-// Famous openings for the landing board (replayed by the server, shown only as decoration).
-const SHOWCASE = [
-  { name: 'Italian Game', moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'c3', 'Nf6', 'd4', 'exd4', 'cxd4', 'Bb4+'] },
-  { name: 'Sicilian Najdorf', moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6'] },
-  { name: "Queen's Gambit Declined", moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Bg5', 'Be7', 'e3', 'O-O', 'Nf3', 'Nbd7'] },
-  { name: 'Caro-Kann Advance', moves: ['e4', 'c6', 'd4', 'd5', 'e5', 'Bf5', 'Nf3', 'e6', 'Be2', 'c5'] },
-  { name: 'Ruy Lopez, Berlin', moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'Nf6', 'O-O', 'Nxe4', 'd4', 'Nd6', 'Bxc6', 'dxc6', 'dxe5', 'Nf5', 'Qxd8+', 'Kxd8'] },
+  { id: 'board', label: 'Board' },
+  { id: 'weak', label: 'Weak lines' },
+  { id: 'book', label: 'Leaving theory' },
+  { id: 'plan', label: 'Study plan' },
+  { id: 'opponent', label: 'Opponent' },
+  { id: 'how', label: 'How it works' },
 ]
 
 export default function App() {
+  const [theme, setTheme] = useState(initialTheme)
   const [analysis, setAnalysis] = useState(null)
   const [opponent, setOpponent] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [tab, setTab] = useState('explore')
+  const [tab, setTab] = useState('board')
   const [path, setPath] = useState([])
   const [timings, setTimings] = useState([])
-  const [showImport, setShowImport] = useState(false)
-  const [showcase, setShowcase] = useState(0)
+  const [changing, setChanging] = useState(false)
+  const [scoutNext, setScoutNext] = useState(false)
+  const [showHow, setShowHow] = useState(false)
+
+  useEffect(() => applyTheme(theme), [theme])
 
   const onTiming = useCallback((label, res) => {
-    setTimings((t) => [{ label, millis: res.millis, algorithm: res.algorithm }, ...t].slice(0, 14))
+    setTimings((t) => [{ label, millis: res.millis, algorithm: res.algorithm }, ...t].slice(0, 12))
   }, [])
 
   async function onImport(req) {
-    setBusy(true)
-    try {
-      const created = await api.createAnalysis(req)
-      setAnalysis(created)
-      setOpponent(null)
-      setTimings((t) => [{ label: 'Import + build trie', millis: created.millis, algorithm: { name: 'PGN replay + trie insert' } }, ...t])
-      setPath([])
-      setTab('explore')
-      setShowImport(false)
-    } finally {
-      setBusy(false)
-    }
+    const created = await api.createAnalysis(req)
+    setAnalysis(created)
+    setOpponent(null)
+    setTimings((t) => [{ label: 'Import games', millis: created.millis, algorithm: { name: 'Replay games and build the opening tree' } }, ...t])
+    setPath([])
+    setTab(scoutNext ? 'opponent' : 'board')
+    setScoutNext(false)
+    setChanging(false)
+    setShowHow(false)
   }
 
-  function openLine(moves) {
+  function openOnBoard(moves) {
     setPath(moves)
-    setTab('explore')
+    setTab('board')
   }
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [tab])
 
   const s = analysis?.summary
   const r = s?.importReport
   const skipped = r ? r.nonStandard + r.unfinished + r.illegal + r.noMoves : 0
+  const dark = theme === 'dark'
 
   return (
-    <div className="app">
+    <div className={`app ${analysis ? '' : 'is-start'}`}>
       <header className="top">
-        <div className="brand">
-          <span className="logo" aria-hidden="true">♞</span>
-          <span className="brand-name">Opening<span>Coach</span></span>
-        </div>
-        {analysis && (
-          <div className="player-chip">
-            <span className="dot" />
-            <span>
-              <strong>{s.player}</strong> · {s.colour === 'white' ? '♔' : '♚'} {s.games} games
+        <button className="logo" onClick={() => { setShowHow(false); if (analysis) setTab('board') }} aria-label="OpeningCoach home">
+          <img src={dark ? '/pieces/wN.svg' : '/pieces/bN.svg'} alt="" />
+          <span className="logo-text">Opening<span>Coach</span></span>
+        </button>
+        <span className="spacer" />
+        {analysis ? (
+          <>
+            <span className="who">
+              <strong>{s.player}</strong> as {s.colour} · {s.games} games · scored {pct(s.score)}
+              {skipped > 0 && ` · ${skipped} skipped`}
             </span>
-            <button onClick={() => setShowImport((v) => !v)}>{showImport ? 'Close' : 'Change'}</button>
-          </div>
+            <button onClick={() => setChanging((c) => !c)}>{changing ? 'Cancel' : 'Change player'}</button>
+          </>
+        ) : (
+          <button className="nav-link" onClick={() => setShowHow((v) => !v)}>{showHow ? 'Back' : 'How it works'}</button>
         )}
+        <button className="theme-toggle" onClick={() => setTheme(dark ? 'light' : 'dark')}
+                aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'}>
+          {dark ? (
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z" /></svg>
+          )}
+        </button>
       </header>
 
-      {!analysis && (
-        <section className="hero fade-in">
-          <div className="hero-copy">
-            <h1>
-              Know your openings.<br />
-              <span className="grad">Fix the leaks. Scout your rival.</span>
-            </h1>
-            <p className="lede">
-              OpeningCoach reads your games and builds a tree of every opening you play. It compares each position
-              with 21,925 games between players rated 1700+, shows you where you lose points, and plans exactly what to
-              study.
-            </p>
-            <ImportPanel onImport={onImport} busy={busy} compact />
-            <div className="hero-feats">
-              <span>♞ Interactive board</span>
-              <span>⚠ Weak-line finder</span>
-              <span>✎ Time-boxed study plan</span>
-              <span>⚔ Opponent prep</span>
-            </div>
-          </div>
-          <div className="hero-board">
-            <div className="hero-glow" />
-            <LineReplay
-              moves={SHOWCASE[showcase].moves}
-              interval={700}
-              controls={false}
-              onDone={() => setShowcase((i) => (i + 1) % SHOWCASE.length)}
-            />
-            <div className="hero-caption">
-              <span className="label">Now playing</span>
-              <strong>{SHOWCASE[showcase].name}</strong>
-            </div>
-          </div>
-        </section>
+      {!analysis && !showHow && <StartScreen onImport={onImport} onScoutAfter={() => setScoutNext(true)} />}
+      {!analysis && showHow && (
+        <main className="page">
+          <UnderTheHood timings={timings} />
+        </main>
       )}
 
       {analysis && (
-        <main className="fade-in">
-          {showImport && (
-            <div className="drawer fade-in">
-              <ImportPanel onImport={onImport} busy={busy} compact />
+        <main className="page">
+          {changing && (
+            <div style={{ maxWidth: 560, marginBottom: 20 }}>
+              <ImportPanel onImport={onImport} onCancel={() => setChanging(false)} />
             </div>
           )}
-
-          <section className="summary">
-            <Stat label="Games analysed" value={s.games} sub={skipped ? `${skipped} skipped` : `as ${s.colour}`} />
-            <div className="stat card">
-              <span className="label">Score · {s.wins}W {s.draws}D {s.losses}L</span>
-              <ScoreBar score={s.score} />
-            </div>
-            <Stat label="Opening tree" value={s.trieNodes} sub={`lines, first ${s.maxPly / 2} moves`} />
-            <Stat label="Opponent" value={opponent ? opponent.summary.player : '—'} sub={opponent ? `${opponent.summary.games} games scouted` : 'not scouted yet'} raw />
-          </section>
 
           <nav className="tabs" role="tablist">
             {TABS.map((t) => (
               <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
-                <span className="ti" aria-hidden="true">{t.icon}</span>
                 {t.label}
               </button>
             ))}
           </nav>
 
-          <section className="panel fade-in" key={tab}>
-            {tab === 'explore' && <Explorer analysis={analysis} path={path} setPath={setPath} onTiming={onTiming} />}
-            {tab === 'weak' && <WeakLines analysis={analysis} openLine={openLine} onTiming={onTiming} />}
-            {tab === 'book' && <OutOfBook analysis={analysis} openLine={openLine} onTiming={onTiming} />}
-            {tab === 'plan' && <StudyPlan analysis={analysis} openLine={openLine} onTiming={onTiming} />}
-            {tab === 'scout' && <Scout analysis={analysis} opponent={opponent} setOpponent={setOpponent} onTiming={onTiming} />}
-            {tab === 'hood' && <UnderTheHood timings={timings} />}
-          </section>
+          {tab === 'board' && <Explorer analysis={analysis} path={path} setPath={setPath} onTiming={onTiming} />}
+          {tab === 'weak' && <WeakLines analysis={analysis} openOnBoard={openOnBoard} onTiming={onTiming} />}
+          {tab === 'book' && <OutOfBook analysis={analysis} openOnBoard={openOnBoard} onTiming={onTiming} />}
+          {tab === 'plan' && <StudyPlan analysis={analysis} openOnBoard={openOnBoard} onTiming={onTiming} />}
+          {tab === 'opponent' && <Scout analysis={analysis} opponent={opponent} setOpponent={setOpponent} onTiming={onTiming} />}
+          {tab === 'how' && <UnderTheHood timings={timings} />}
         </main>
       )}
 
       <footer>
-        Analyses finished games only. Using an opening explorer during a game breaks Lichess and Chess.com fair-play
-        rules. Pieces: Colin M.L. Burnett (CC BY-SA 3.0). Reference games: Lichess open database (CC0). CIA 3 Advanced
-        Algorithm project.
+        Only finished games are analysed. Using an opening explorer during a game breaks Lichess and Chess.com fair-play
+        rules. Reference games: Lichess open database (CC0). Pieces: Colin M.L. Burnett (CC BY-SA 3.0).
       </footer>
-    </div>
-  )
-}
-
-function Stat({ label, value, sub, raw }) {
-  const [shown, setShown] = useState(raw || typeof value !== 'number' ? value : 0)
-  useEffect(() => {
-    if (raw || typeof value !== 'number') {
-      setShown(value)
-      return
-    }
-    let frame
-    const start = performance.now()
-    const tick = (t) => {
-      const k = Math.min(1, (t - start) / 700)
-      setShown(Math.round(value * (1 - Math.pow(1 - k, 3))))
-      if (k < 1) frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [value])
-  return (
-    <div className="stat card">
-      <span className="label">{label}</span>
-      <strong className="big">{typeof shown === 'number' ? shown.toLocaleString() : shown}</strong>
-      {sub && <span className="muted small">{sub}</span>}
     </div>
   )
 }

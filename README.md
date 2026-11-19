@@ -59,6 +59,7 @@ npm run build                                   # writes into api/src/main/resou
 | File | Source | Licence |
 |---|---|---|
 | `data/reference/lichess-2013-01-1700plus.pgn` | Lichess open database, January 2013, both players rated ≥ 1700 (21,925 games) | CC0 |
+| Titillium Web font (loaded from Google Fonts) | Accademia di Belle Arti di Urbino | SIL Open Font License |
 | `frontend/public/pieces/*.svg` | Chess pieces by Colin M.L. Burnett, via Wikimedia Commons | CC BY-SA 3.0 |
 | `data/samples/demo_player.pgn` | 900 club-level games (1200–1650) from the same month, one side relabelled `demo_player` | CC0 |
 

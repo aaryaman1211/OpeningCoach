@@ -1,10 +1,10 @@
 // Tiny synthesised move sounds (no audio files). Muted state is remembered per browser.
 let ctx = null
-let muted = false
+let muted = true // off unless the user turns it on
 try {
-  muted = localStorage.getItem('oc-muted') === '1'
+  muted = localStorage.getItem('oc-muted') !== '0'
 } catch {
-  muted = false
+  muted = true
 }
 
 export function isMuted() {

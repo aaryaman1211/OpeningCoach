@@ -1,12 +1,19 @@
 // Thin client for the Java REST API. All algorithms (and all chess rules) run on the server;
 // this file only moves JSON.
 
+const OFFLINE = "Can't reach the OpeningCoach server. Start it with: java -jar api/target/openingcoach-api-1.0.0.jar"
+
 async function request(method, path, body) {
-  const res = await fetch(path, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  let res
+  try {
+    res = await fetch(path, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch {
+    throw new Error(OFFLINE)
+  }
   const text = await res.text()
   let data = null
   try {
@@ -15,7 +22,9 @@ async function request(method, path, body) {
     data = null
   }
   if (!res.ok) {
-    const msg = data?.detail || `Server returned ${res.status}`
+    // the dev proxy answers 500/502/504 with no JSON body when the Java server is down
+    if (!data && [500, 502, 503, 504].includes(res.status)) throw new Error(OFFLINE)
+    const msg = data?.detail || `Something went wrong on the server (${res.status}).`
     throw new Error(msg)
   }
   return data

@@ -1,28 +1,31 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import ChessBoard from './ChessBoard.jsx'
+import { Next, Pause, Play, Prev, Restart } from './Icons.jsx'
 
 /**
- * Plays a line move by move on a read-only board. The server replays the moves and returns each
- * position; this component only steps through them.
+ * Steps through a line on a read-only board. The server replays the moves and returns every
+ * position; this component only moves between them.
+ *
+ * startAt: 'start' plays from move 1; 'end' opens on the final position (press play to watch).
  */
-export default function LineReplay({ moves, orientation = 'white', interval = 900, autoPlay = true, loop = false,
-                                     onDone, renderStep, controls = true, arrowsFor }) {
+export default function LineReplay({ moves, orientation = 'white', interval = 900, autoPlay = true, onDone,
+                                     controls = true, renderSteps, arrowsAt, startAt = 'start' }) {
   const [replay, setReplay] = useState(null)
   const [idx, setIdx] = useState(-1)
-  const [playing, setPlaying] = useState(autoPlay)
+  const [playing, setPlaying] = useState(autoPlay && startAt === 'start')
   const [error, setError] = useState('')
   const key = moves.join(',')
 
   useEffect(() => {
     let live = true
-    // keep showing the old line until the new one arrives, then pieces slide back to the start
+    // keep the previous line on screen until the new one arrives, so pieces slide instead of flashing
     api.board(moves)
       .then((r) => {
         if (!live) return
         setReplay(r)
-        setIdx(-1)
-        setPlaying(autoPlay)
+        setIdx(startAt === 'end' ? r.plies.length - 1 : -1)
+        setPlaying(autoPlay && startAt === 'start')
       })
       .catch((e) => live && setError(e.message))
     return () => {
@@ -34,41 +37,41 @@ export default function LineReplay({ moves, orientation = 'white', interval = 90
     if (!replay || !playing) return
     if (idx >= replay.plies.length - 1) {
       const t = setTimeout(() => {
-        if (loop) setIdx(-1)
-        else setPlaying(false)
+        setPlaying(false)
         onDone?.()
-      }, interval * 2.2)
+      }, interval * 2)
       return () => clearTimeout(t)
     }
-    const t = setTimeout(() => setIdx((i) => i + 1), idx === -1 ? interval * 0.8 : interval)
+    const t = setTimeout(() => setIdx((i) => i + 1), interval)
     return () => clearTimeout(t)
   }, [replay, playing, idx])
 
   if (error) return <p className="error small">{error}</p>
   if (!replay) return <div className="skeleton board-skel" />
   const ply = idx >= 0 ? replay.plies[idx] : null
-  const fen = ply ? ply.fen : replay.startFen
+  const atEnd = idx >= replay.plies.length - 1
 
   return (
-    <div className="replay">
+    <div>
       <ChessBoard
-        fen={fen}
+        fen={ply ? ply.fen : replay.startFen}
         orientation={orientation}
         interactive={false}
         lastMove={ply ? { from: ply.from, to: ply.to } : null}
-        arrows={arrowsFor ? arrowsFor(idx, replay.plies) : []}
+        arrows={arrowsAt ? arrowsAt(idx, replay.plies) : []}
       />
       {controls && (
-        <div className="toolbar compact">
-          <button onClick={() => { setIdx(-1); setPlaying(true) }} aria-label="Restart">↺</button>
-          <button onClick={() => setIdx((i) => Math.max(-1, i - 1))} aria-label="Back">◀</button>
-          <button className={`play ${playing ? 'on' : ''}`} onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
-            {playing ? '❚❚' : '▶'}
+        <div className="controls">
+          <button className="icon" onClick={() => { setIdx(-1); setPlaying(false) }} aria-label="Back to start" title="Back to start"><Restart /></button>
+          <button className="icon" onClick={() => { setPlaying(false); setIdx((i) => Math.max(-1, i - 1)) }} disabled={idx < 0} aria-label="Previous move" title="Previous move"><Prev /></button>
+          <button className="icon" onClick={() => { if (atEnd) setIdx(-1); setPlaying((p) => !p) }} aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play the line'}>
+            {playing ? <Pause /> : <Play />}
           </button>
-          <button onClick={() => setIdx((i) => Math.min(replay.plies.length - 1, i + 1))} aria-label="Forward">▶</button>
+          <button className="icon" onClick={() => { setPlaying(false); setIdx((i) => Math.min(replay.plies.length - 1, i + 1)) }} disabled={atEnd} aria-label="Next move" title="Next move"><Next /></button>
+          <span className="muted small">{idx < 0 ? 'Start' : `Move ${Math.floor(idx / 2) + 1}${idx % 2 ? '…' : '.'} ${replay.plies[idx].san}`}</span>
         </div>
       )}
-      {renderStep && renderStep(idx, replay.plies, (i) => { setIdx(i); setPlaying(false) })}
+      {renderSteps && renderSteps(idx, (i) => { setIdx(i); setPlaying(false) })}
     </div>
   )
 }

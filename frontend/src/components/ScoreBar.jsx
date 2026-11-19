@@ -1,14 +1,18 @@
-// A small horizontal bar for a score in [0, 1]; red below 45%, green above 55%.
-export default function ScoreBar({ score, muted }) {
-  if (score == null) return <span className="muted">—</span>
+// A score in [0, 1] as a short bar and a percentage. Coloured only when compared with
+// another score (e.g. yours vs strong players') and the gap is meaningful (5+ points).
+export default function ScoreBar({ score, compare }) {
+  if (score == null) return <span className="muted">–</span>
   const p = Math.round(score * 100)
-  const tone = muted ? 'neutral' : p < 45 ? 'bad' : p > 55 ? 'good' : 'mid'
+  let tone = ''
+  if (compare != null) {
+    const gap = score - compare
+    if (gap >= 0.05) tone = 'good'
+    else if (gap <= -0.05) tone = 'bad'
+  }
   return (
-    <span className="scorebar" title={`${p}%`}>
-      <span className="track">
-        <span className={`fill ${tone}`} style={{ width: `${p}%` }} />
-      </span>
-      <span className="num">{p}%</span>
+    <span className={`score ${tone}`}>
+      <span className="track"><span className="fill" style={{ width: `${p}%` }} /></span>
+      <span className="val">{p}%</span>
     </span>
   )
 }
