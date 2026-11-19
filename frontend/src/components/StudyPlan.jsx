@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, pct } from '../api.js'
 import LineReplay from './LineReplay.jsx'
+import PageHeader from './PageHeader.jsx'
 
 /** Which lines to study: within a time budget, or enough to cover every weak line. */
 export default function StudyPlan({ analysis, openOnBoard, onTiming }) {
@@ -38,15 +39,10 @@ export default function StudyPlan({ analysis, openOnBoard, onTiming }) {
 
   return (
     <div>
-      <div className="section-head">
-        <div>
-          <h2>Study plan</h2>
-          <p className="muted">
-            Each study line is one of your weak lines followed by strong players’ usual continuation. One line can fix
-            several weak spots at once, so the plan picks the lines that fix the most for the time.
-          </p>
-        </div>
-      </div>
+      <PageHeader kicker="Study plan" title="Practice makes" accent="pawn-fect.">
+        Each study line is one of your weak lines plus strong players’ usual continuation. One line can fix several weak
+        spots, so the plan picks the lines that fix the most for your time.
+      </PageHeader>
 
       <div className="plan-controls">
         <div className="field">

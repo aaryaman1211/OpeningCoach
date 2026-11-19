@@ -10,12 +10,13 @@ import { Next, Pause, Play, Prev, Restart } from './Icons.jsx'
  * startAt: 'start' plays from move 1; 'end' opens on the final position (press play to watch).
  */
 export default function LineReplay({ moves, orientation = 'white', interval = 900, autoPlay = true, onDone,
-                                     controls = true, renderSteps, arrowsAt, startAt = 'start' }) {
+                                     controls = true, renderSteps, arrowsAt, startAt = 'start', tilt = 0, jumpRef }) {
   const [replay, setReplay] = useState(null)
   const [idx, setIdx] = useState(-1)
   const [playing, setPlaying] = useState(autoPlay && startAt === 'start')
   const [error, setError] = useState('')
   const key = moves.join(',')
+  if (jumpRef) jumpRef.current = (i) => { setIdx(i); setPlaying(false) }
 
   useEffect(() => {
     let live = true
@@ -59,6 +60,7 @@ export default function LineReplay({ moves, orientation = 'white', interval = 90
         interactive={false}
         lastMove={ply ? { from: ply.from, to: ply.to } : null}
         arrows={arrowsAt ? arrowsAt(idx, replay.plies) : []}
+        tilt={tilt}
       />
       {controls && (
         <div className="controls">

@@ -3,6 +3,7 @@ package com.openingcoach.api.service;
 import com.openingcoach.api.CoachProperties;
 import com.openingcoach.api.dto.Dtos.AnalysisCreated;
 import com.openingcoach.api.dto.Dtos.CreateAnalysisRequest;
+import com.openingcoach.api.dto.Dtos.PairRequest;
 import com.openingcoach.api.dto.Dtos.StudyPlanRequest;
 import com.openingcoach.api.dto.Dtos.Timed;
 import com.openingcoach.api.source.GameSourceClient;
@@ -52,11 +53,55 @@ public class AnalysisService {
     public AnalysisCreated create(CreateAnalysisRequest req) {
         long t0 = System.nanoTime();
         boolean white = req.colour().equals("white");
-        int max = Math.min(req.maxGames() == null ? 500 : req.maxGames(), props.maxGames());
-        boolean bullet = Boolean.TRUE.equals(req.includeBullet());
-        String pgn = switch (req.source()) {
-            case "lichess" -> sources.lichess(req.username(), white, max, bullet);
-            case "chesscom" -> sources.chessCom(req.username(), white, max, bullet);
+        String player = playerName(req.source(), req.username());
+        List<PgnGame> games = fetchGames(req.source(), req.username(), white, req.maxGames(), req.includeBullet(), req.pgnText());
+        Repertoire rep = Repertoire.build(games, player, white, props.maxPly());
+        if (rep.games().isEmpty()) {
+            Repertoire.ImportReport r = rep.report();
+            throw new IllegalArgumentException("None of the " + r.gamesRead() + " games could be used: "
+                    + r.otherPlayerOrColour() + " were not " + player + " playing " + req.colour() + ", "
+                    + r.nonStandard() + " were variants, " + r.unfinished() + " unfinished, " + r.illegal()
+                    + " had illegal moves");
+        }
+        return store(rep, req.source(), t0);
+    }
+
+    /**
+     * Downloads (or reads) the player's games once and builds both repertoires, so the user can
+     * switch between their White and Black openings without importing twice.
+     */
+    public PairCreated createPair(PairRequest req) {
+        long t0 = System.nanoTime();
+        String player = playerName(req.source(), req.username());
+        List<PgnGame> games = fetchGames(req.source(), req.username(), null, req.maxGames(), req.includeBullet(), req.pgnText());
+        Repertoire white = Repertoire.build(games, player, true, props.maxPly());
+        Repertoire black = Repertoire.build(games, player, false, props.maxPly());
+        if (white.games().isEmpty() && black.games().isEmpty()) {
+            Repertoire.ImportReport r = white.report();
+            throw new IllegalArgumentException("None of the " + r.gamesRead() + " games could be used. Check that '"
+                    + player + "' is the name used in the games.");
+        }
+        return new PairCreated(store(white, req.source(), t0), store(black, req.source(), t0), ms(t0));
+    }
+
+    private AnalysisCreated store(Repertoire rep, String source, long t0) {
+        OpeningAnalyzer analyzer = new OpeningAnalyzer(rep, reference.book(), 20261119L);
+        String id = UUID.randomUUID().toString();
+        store.put(id, analyzer);
+        return new AnalysisCreated(id, analyzer.summary(), ms(t0), source);
+    }
+
+    private static String playerName(String source, String username) {
+        return "demo".equals(source) ? "demo_player" : username;
+    }
+
+    private List<PgnGame> fetchGames(String source, String username, Boolean white, Integer maxGames,
+                                     Boolean includeBullet, String pgnText) {
+        int max = Math.min(maxGames == null ? 500 : maxGames, props.maxGames());
+        boolean bullet = Boolean.TRUE.equals(includeBullet);
+        String pgn = switch (source) {
+            case "lichess" -> sources.lichess(username, white, max, bullet);
+            case "chesscom" -> sources.chessCom(username, white, max, bullet);
             case "demo" -> {
                 Path demo = ReferenceService.resolveDataDir(props.dataDir()).resolve("samples/demo_player.pgn");
                 try {
@@ -66,30 +111,21 @@ public class AnalysisService {
                 }
             }
             case "pgn" -> {
-                if (req.pgnText() == null || req.pgnText().isBlank()) {
+                if (pgnText == null || pgnText.isBlank()) {
                     throw new IllegalArgumentException("Upload a PGN file (pgnText is empty)");
                 }
-                yield req.pgnText();
+                yield pgnText;
             }
-            default -> throw new IllegalArgumentException("Unknown source " + req.source());
+            default -> throw new IllegalArgumentException("Unknown source " + source);
         };
-        String player = req.source().equals("demo") ? "demo_player" : req.username();
         List<PgnGame> games = PgnParser.parseAll(pgn);
         if (games.isEmpty()) {
-            throw new IllegalArgumentException("No games found for '" + player + "'");
+            throw new IllegalArgumentException("No games found for '" + playerName(source, username) + "'");
         }
-        Repertoire rep = Repertoire.build(games, player, white, props.maxPly());
-        if (rep.games().isEmpty()) {
-            Repertoire.ImportReport r = rep.report();
-            throw new IllegalArgumentException("None of the " + r.gamesRead() + " games could be used: "
-                    + r.otherPlayerOrColour() + " were not " + req.username() + " playing " + req.colour() + ", "
-                    + r.nonStandard() + " were variants, " + r.unfinished() + " unfinished, " + r.illegal()
-                    + " had illegal moves");
-        }
-        OpeningAnalyzer analyzer = new OpeningAnalyzer(rep, reference.book(), 20261119L);
-        String id = UUID.randomUUID().toString();
-        store.put(id, analyzer);
-        return new AnalysisCreated(id, analyzer.summary(), ms(t0), req.source());
+        return games;
+    }
+
+    public record PairCreated(AnalysisCreated white, AnalysisCreated black, double millis) {
     }
 
     public OpeningAnalyzer get(String id) {
@@ -154,6 +190,15 @@ public class AnalysisService {
         algo.put("approximate", true);
         algo.put("candidateLines", t.result().candidateLines());
         algo.put("bruteForceCompared", t.result().optimalValue() != null);
+        return new Timed<>(t.result(), t.millis(), algo);
+    }
+
+    public Timed<OpeningAnalyzer.HighlightsResult> highlights(String id, int k, int minOpponentElo) {
+        OpeningAnalyzer a = get(id);
+        Timed<OpeningAnalyzer.HighlightsResult> t = timed(() -> a.highlights(k, minOpponentElo), Map.of());
+        Map<String, Object> algo = new LinkedHashMap<>();
+        algo.put("name", "Randomized Quickselect (k quickest wins) + Randomized QuickSort");
+        algo.put("candidates", t.result().candidates());
         return new Timed<>(t.result(), t.millis(), algo);
     }
 

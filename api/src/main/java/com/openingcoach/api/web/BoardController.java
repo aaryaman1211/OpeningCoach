@@ -30,8 +30,8 @@ public class BoardController {
     public Replay replay(@RequestParam(defaultValue = "") String moves) {
         List<String> sans = moves.isBlank() ? List.of()
                 : Arrays.stream(moves.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
-        if (sans.size() > 60) {
-            throw new IllegalArgumentException("At most 60 plies");
+        if (sans.size() > 400) {
+            throw new IllegalArgumentException("At most 400 plies");
         }
         Board b = Board.startPosition();
         String start = b.toFen();

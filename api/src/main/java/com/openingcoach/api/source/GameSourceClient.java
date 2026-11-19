@@ -41,11 +41,14 @@ public class GameSourceClient {
         this.userAgent = props.userAgent();
     }
 
-    /** Lichess: GET /api/games/user/{name} streams PGN; filtered server-side by colour and speed. */
-    public String lichess(String username, boolean white, int max, boolean includeBullet) {
+    /**
+     * Lichess: GET /api/games/user/{name} streams PGN, filtered server-side by speed and, when
+     * {@code white} is not null, by colour (null = both colours in one download).
+     */
+    public String lichess(String username, Boolean white, int max, boolean includeBullet) {
         String perf = includeBullet ? "bullet,blitz,rapid,classical,correspondence" : "blitz,rapid,classical,correspondence";
         String url = "https://lichess.org/api/games/user/" + enc(username)
-                + "?max=" + max + "&color=" + (white ? "white" : "black") + "&perfType=" + perf
+                + "?max=" + max + (white == null ? "" : "&color=" + (white ? "white" : "black")) + "&perfType=" + perf
                 + "&clocks=false&evals=false&opening=false&literate=false";
         HttpResponse<String> res = get(url, "application/x-chess-pgn", Duration.ofSeconds(90));
         switch (res.statusCode()) {
@@ -63,7 +66,7 @@ public class GameSourceClient {
      * Chess.com: list monthly archives, then download each month's PGN from newest to oldest
      * until enough games with the requested colour are collected.
      */
-    public String chessCom(String username, boolean white, int max, boolean includeBullet) {
+    public String chessCom(String username, Boolean white, int max, boolean includeBullet) {
         String name = username.toLowerCase();
         HttpResponse<String> res = get("https://api.chess.com/pub/player/" + enc(name) + "/games/archives",
                 "application/json", Duration.ofSeconds(20));
@@ -91,8 +94,9 @@ public class GameSourceClient {
                 if (kept >= max || game.isBlank()) {
                     continue;
                 }
-                String side = tag(game, white ? WHITE_TAG : BLACK_TAG);
-                if (!side.equalsIgnoreCase(username)) {
+                boolean asWhite = tag(game, WHITE_TAG).equalsIgnoreCase(username);
+                boolean asBlack = tag(game, BLACK_TAG).equalsIgnoreCase(username);
+                if (white == null ? !(asWhite || asBlack) : !(white ? asWhite : asBlack)) {
                     continue;
                 }
                 if (!includeBullet && isBullet(game)) {

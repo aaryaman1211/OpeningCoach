@@ -28,6 +28,15 @@ public final class Dtos {
             @Size(max = 20_000_000, message = "PGN text is limited to 20 MB") String pgnText) {
     }
 
+    /** POST /api/analyses/pair: one download, both colours analysed */
+    public record PairRequest(
+            @NotNull @Pattern(regexp = "lichess|chesscom|pgn|demo", message = "must be lichess, chesscom, pgn or demo") String source,
+            @NotBlank @Pattern(regexp = "[A-Za-z0-9_-]{2,30}", message = "must be 2-30 letters, digits, _ or -") String username,
+            @Min(1) @Max(2000) Integer maxGames,
+            Boolean includeBullet,
+            @Size(max = 20_000_000, message = "PGN text is limited to 20 MB") String pgnText) {
+    }
+
     /** POST /api/analyses/{id}/study-plan */
     public record StudyPlanRequest(
             @DecimalMin("0") @DecimalMax("100000") Double budgetMinutes,

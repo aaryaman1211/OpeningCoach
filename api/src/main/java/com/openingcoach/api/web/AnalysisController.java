@@ -2,6 +2,7 @@ package com.openingcoach.api.web;
 
 import com.openingcoach.api.dto.Dtos.AnalysisCreated;
 import com.openingcoach.api.dto.Dtos.CreateAnalysisRequest;
+import com.openingcoach.api.dto.Dtos.PairRequest;
 import com.openingcoach.api.dto.Dtos.StudyPlanRequest;
 import com.openingcoach.api.dto.Dtos.Timed;
 import com.openingcoach.api.service.AnalysisService;
@@ -35,6 +36,21 @@ public class AnalysisController {
     @ResponseStatus(HttpStatus.CREATED)
     public AnalysisCreated create(@Valid @RequestBody CreateAnalysisRequest req) {
         return service.create(req);
+    }
+
+    /** Imports once and analyses both colours: returns one analysis for White and one for Black. */
+    @PostMapping("/pair")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AnalysisService.PairCreated createPair(@Valid @RequestBody PairRequest req) {
+        return service.createPair(req);
+    }
+
+    /** The player's quickest wins (optionally only against opponents rated at least minOpponentElo). */
+    @GetMapping("/{id}/highlights")
+    public Timed<OpeningAnalyzer.HighlightsResult> highlights(@PathVariable String id,
+                                                              @RequestParam(defaultValue = "6") @Min(1) @Max(20) int k,
+                                                              @RequestParam(defaultValue = "0") @Min(0) @Max(3500) int minOpponentElo) {
+        return service.highlights(id, k, minOpponentElo);
     }
 
     @GetMapping("/{id}")

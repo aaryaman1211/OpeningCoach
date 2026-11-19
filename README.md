@@ -7,11 +7,16 @@ players rated 1700+. It then shows:
 - **Weak lines**: where you lose the most points compared with strong players from the same position.
 - **Leaving theory**: the move where your games leave known theory, and what strong players play there instead.
 - **Study plan**: which lines to study in the time you have ("Fit my time") or to fix everything ("Fix everything").
-- **Board**: an animated, interactive board. Drag or click pieces to play any legal move, see arrows for strong
+- **One import, both colours**: your White and Black games are analysed together; the White/Black switch in the
+  header flips every screen (and the opponent's colour) without importing again.
+- **Board**: an animated, interactive board, shown as a 3D table-top view (or flat). Drag or click pieces to play any legal move, see arrows for strong
   players' choices and your favourite move, draw your own arrows with right-drag, step with the arrow keys, and
   auto-play your main line. A gauge beside the board shows your score next to strong players'.
 - **Scout opponent**: load an opponent's games to see their repertoire, where they struggle, your best weapons and
   danger zones against them, and an animated prediction of how your game will start.
+- **The greats**: ten great players. Famous games (Carlsen, Kasparov, Fischer, Morphy, Anderssen, Réti, Ed. Lasker)
+  replay on the 3D board with a jump to the decisive move; current stars (Nakamura, Gukesh, Caruana) load live from
+  Chess.com with their best recent wins and opening trees.
 - **Under the hood**: Bloom filter parameters, live lookup counters and server timings.
 
 CIA 3 Advanced Algorithm project. All assessed algorithms are hand-written in Java in `core/` (no Spring imports there).
@@ -34,25 +39,27 @@ Approximation results are labelled approximate in the API and UI; the study plan
 
 ## Run it
 
-Prerequisites: Java 21+, Maven 3.9+, Node 18+ (only to rebuild the frontend), curl and zstd (only to rebuild the data).
+Prerequisites: Java 21+, Maven 3.9+, Node 18+, plus curl and zstd only if you rebuild the data.
 
 ```bash
-# 1. build the frontend into the server, then everything (runs the 73 tests)
-cd frontend && npm install && npm run build && cd ..
-mvn install
+./run.sh            # builds whatever changed, then starts everything on http://localhost:8080
+./run.sh --rebuild  # force a full rebuild first
+```
 
-# 2. start the server (first start builds data/index from data/reference in about 5 s)
+Open http://localhost:8080 and choose **Demo game** to try it offline, or enter a Lichess / Chess.com username.
+The server keeps analyses in memory. If it restarts while a page is open, the page waits for it and reloads your
+games by itself.
+
+Manual steps, if you prefer:
+
+```bash
+cd frontend && npm install && npm run build && cd ..   # writes the UI into api/src/main/resources/static
+mvn install                                           # builds and runs the 73 tests
 java -jar api/target/openingcoach-api-1.0.0.jar
 ```
 
-Open http://localhost:8080 and choose **Demo games** to try it offline, or enter a Lichess / Chess.com username.
-
-Frontend development with hot reload (the API must be running on 8080):
-
-```bash
-cd frontend && npm install && npm run dev      # http://localhost:5173
-npm run build                                   # writes into api/src/main/resources/static, then re-run mvn install
-```
+Frontend work with hot reload: keep the Java server running, then `cd frontend && npm run dev` and open
+http://localhost:5173. The dev page needs the Java server on port 8080.
 
 ### Data
 
@@ -76,6 +83,8 @@ Note that the demo file mixes many real players' games under one name. It is a t
 | GET | `/api/analyses/{id}/weak-lines?k=10&minGames=3` | |
 | GET | `/api/analyses/{id}/out-of-book?k=10` | |
 | POST | `/api/analyses/{id}/study-plan` | `{"budgetMinutes":60,"minutesPerPly":2,"extraPlies":6,"weakLines":15,"minGames":3}` (`budgetMinutes: null` = fix everything) |
+| POST | `/api/analyses/pair` | `{"source","username","maxGames","includeBullet","pgnText"}`: one download, returns `{white, black}` analyses |
+| GET | `/api/analyses/{id}/highlights?k=6&minOpponentElo=2400` | best wins: checkmates first, then strongest opponents (Quickselect top-k) |
 | GET | `/api/analyses/{id}/top-lines?k=8&depth=6` | most-played lines at a depth |
 | GET | `/api/analyses/{id}/matchup/{opponentId}?minGames=2&k=6` | weapons, dangers, predicted game (opposite colours) |
 | GET | `/api/board?moves=e4,e5,Nf3` | replays a line: from/to squares and position for each ply |

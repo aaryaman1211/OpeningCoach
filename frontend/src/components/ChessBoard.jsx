@@ -79,6 +79,7 @@ export default function ChessBoard({
   arrows = [],
   interactive = true,
   showCoords = true,
+  tilt = 0,
 }) {
   const placement = useMemo(() => parseFen(fen), [fen])
   const sideToMove = fen.split(' ')[1] || 'w'
@@ -93,6 +94,8 @@ export default function ChessBoard({
   const rightStart = useRef(null)
   const committedFen = useRef(null)
   const boardRef = useRef(null)
+  const stageRef = useRef(null)
+  const is3d = tilt > 0
   const piecesRef = useRef(pieces)
   piecesRef.current = pieces
 
@@ -128,6 +131,12 @@ export default function ChessBoard({
     : null
 
   function squareAt(clientX, clientY) {
+    if (is3d) {
+      // the board is tilted in 3D: ask the browser which square (or piece) is under the pointer
+      const el = document.elementFromPoint(clientX, clientY)
+      const hit = el?.closest?.('[data-square]')
+      return hit && boardRef.current?.contains(hit) ? hit.dataset.square : null
+    }
     const rect = boardRef.current.getBoundingClientRect()
     const size = rect.width / 8
     return fromXY(Math.floor((clientX - rect.left) / size), Math.floor((clientY - rect.top) / size), orientation)
@@ -183,8 +192,8 @@ export default function ChessBoard({
     if (ownPiece(sq)) {
       setSelected(sq)
       const mover = piecesRef.current.find((o) => o.sq === sq)
-      const rect = boardRef.current.getBoundingClientRect()
-      const d = { sq, id: mover?.id, x: e.clientX - rect.left, y: e.clientY - rect.top, moved: false, sx: e.clientX, sy: e.clientY }
+      const rect = (is3d ? stageRef.current : boardRef.current).getBoundingClientRect()
+      const d = { sq, id: mover?.id, p: mover?.p, x: e.clientX - rect.left, y: e.clientY - rect.top, cx: e.clientX, cy: e.clientY, moved: false, sx: e.clientX, sy: e.clientY }
       dragRef.current = d
       setDrag(d)
     } else setSelected(null)
@@ -199,9 +208,9 @@ export default function ChessBoard({
     const move = (e) => {
       const d = dragRef.current
       if (!d || !boardRef.current) return
-      const rect = boardRef.current.getBoundingClientRect()
+      const rect = (is3d ? stageRef.current : boardRef.current).getBoundingClientRect()
       const moved = d.moved || Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 4
-      const next = { ...d, x: e.clientX - rect.left, y: e.clientY - rect.top, moved }
+      const next = { ...d, x: e.clientX - rect.left, y: e.clientY - rect.top, cx: e.clientX, cy: e.clientY, moved }
       dragRef.current = next
       setDrag(next)
     }
@@ -247,7 +256,7 @@ export default function ChessBoard({
   }
 
   const hoverSq = drag?.moved && boardRef.current
-    ? (() => {
+    ? is3d ? squareAt(drag.cx, drag.cy) : (() => {
         const size = boardRef.current.getBoundingClientRect().width / 8
         return fromXY(Math.floor(drag.x / size), Math.floor(drag.y / size), orientation)
       })()
@@ -256,9 +265,9 @@ export default function ChessBoard({
   const allArrows = [...arrows, ...userArrows.map((a) => ({ ...a, color: 'user' }))]
   const promoColor = sideToMove
 
-  return (
+  const board = (
     <div
-      className={`cb ${interactive ? 'interactive' : ''}`}
+      className={`cb ${interactive ? 'interactive' : ''} ${is3d ? 'is3d' : ''}`}
       ref={boardRef}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
@@ -281,7 +290,7 @@ export default function ChessBoard({
           sq === kingSquare ? 'check' : '',
         ].join(' ')
         return (
-          <div key={sq} className={cls} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%` }}>
+          <div key={sq} className={cls} data-square={sq} style={{ left: `${x * 12.5}%`, top: `${y * 12.5}%` }}>
             {showCoords && x === 0 && <span className="cb-rank">{sq[1]}</span>}
             {showCoords && y === 7 && <span className="cb-file">{sq[0]}</span>}
             {targets.includes(sq) && <span className={placement[sq] ? 'cb-ring' : 'cb-dot'} />}
@@ -294,6 +303,20 @@ export default function ChessBoard({
       {[...ghosts, ...pieces].map((o) => {
         const [x, y] = toXY(o.sq, orientation)
         const dragging = drag?.moved && drag.id === o.id
+        if (is3d) {
+          // a standing piece: positioned on its square, the image turned back up to face the viewer
+          return (
+            <div
+              key={`${o.ghost ? 'g' : 'p'}${o.id}`}
+              className={`cb-pc3 ${o.ghost ? 'ghost' : ''} ${o.fresh ? 'fresh' : ''} ${dragging ? 'lifted' : ''}`}
+              style={{ transform: `translate(${x * 100}%, ${y * 100}%)`, ...(o.id === instantId ? { transition: 'none' } : {}) }}
+            >
+              <span className="pc-shadow" />
+              <img src={pieceImg(o.p)} alt="" data-square={o.ghost ? undefined : o.sq} draggable="false"
+                   style={{ transform: `rotateX(${-tilt}deg)` }} />
+            </div>
+          )
+        }
         const style = dragging
           ? { transform: `translate(calc(${drag.x}px - 50%), calc(${drag.y}px - 50%))`, transition: 'none', zIndex: 30 }
           : { transform: `translate(${x * 100}%, ${y * 100}%)`, ...(o.id === instantId ? { transition: 'none' } : {}) }
@@ -355,6 +378,22 @@ export default function ChessBoard({
           </div>
         )
       })()}
+    </div>
+  )
+
+  if (!is3d) return <div className="frame">{board}</div>
+
+  // perspective view: the board lies on a table tilted away from the viewer
+  const lift = -(1 - Math.cos((tilt * Math.PI) / 180)) * 100 + 12
+  return (
+    <div className="stage3d" ref={stageRef} style={{ marginTop: `${lift}%` }}>
+      <div className="frame tilted" style={{ transform: `rotateX(${tilt}deg)` }}>
+        <span className="frame-edge" aria-hidden="true" />
+        {board}
+      </div>
+      {drag?.moved && drag.p && (
+        <img className="drag-ghost" src={pieceImg(drag.p)} alt="" style={{ left: drag.x, top: drag.y }} />
+      )}
     </div>
   )
 }

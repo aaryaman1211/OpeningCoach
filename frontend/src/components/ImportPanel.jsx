@@ -13,7 +13,6 @@ const SOURCES = [
 export default function ImportPanel({ onImport, opponent = false, defaultColour = 'white', submitLabel = 'Analyse', onCancel }) {
   const [source, setSource] = useState('lichess')
   const [username, setUsername] = useState('')
-  const [colour, setColour] = useState(defaultColour)
   const [maxGames, setMaxGames] = useState(500)
   const [includeBullet, setIncludeBullet] = useState(false)
   const [file, setFile] = useState(null)
@@ -36,7 +35,7 @@ export default function ImportPanel({ onImport, opponent = false, defaultColour 
     }
     setBusy(true)
     try {
-      await onImport({ source, username: name, colour, maxGames: Number(maxGames), includeBullet, pgnText })
+      await onImport({ source, username: name, maxGames: Number(maxGames), includeBullet, pgnText })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -73,16 +72,6 @@ export default function ImportPanel({ onImport, opponent = false, defaultColour 
       )}
 
       <div className="import-row">
-        <div className="field">
-          <span>{opponent ? 'They play' : 'Analyse my games as'}</span>
-          <div className="choice">
-            {['white', 'black'].map((c) => (
-              <button type="button" key={c} className={colour === c ? 'on' : ''} onClick={() => setColour(c)}>
-                {c === 'white' ? 'White' : 'Black'}
-              </button>
-            ))}
-          </div>
-        </div>
         {fetching && (
           <label className="field narrow">
             <span>Up to</span>

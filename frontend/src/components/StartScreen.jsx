@@ -14,7 +14,6 @@ function greeting() {
  */
 export default function StartScreen({ onImport, onScoutAfter }) {
   const [site, setSite] = useState('lichess')
-  const [colour, setColour] = useState('white')
   const [username, setUsername] = useState('')
   const [file, setFile] = useState(null)
   const [busy, setBusy] = useState(null)
@@ -45,10 +44,10 @@ export default function StartScreen({ onImport, onScoutAfter }) {
     }
     if (file) {
       if (file.size > 20 * 1024 * 1024) return setError('That file is larger than 20 MB.')
-      file.text().then((pgnText) => run({ source: 'pgn', username: name, colour, pgnText }, 'go'))
+      file.text().then((pgnText) => run({ source: 'pgn', username: name, pgnText }, 'go'))
       return
     }
-    run({ source: site, username: name, colour, maxGames: 500 }, 'go')
+    run({ source: site, username: name, maxGames: 1000 }, 'go')
   }
 
   function pickFile(f) {
@@ -94,13 +93,6 @@ export default function StartScreen({ onImport, onScoutAfter }) {
               <button type="button" aria-label="Remove file" onClick={() => { setFile(null); fileInput.current.value = '' }}>×</button>
             </span>
           )}
-          <div className="pill-switch" role="radiogroup" aria-label="Your colour">
-            {[['white', 'as White'], ['black', 'as Black']].map(([id, label]) => (
-              <button type="button" key={id} role="radio" aria-checked={colour === id} className={colour === id ? 'on' : ''} onClick={() => setColour(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="name-bar">
@@ -127,7 +119,7 @@ export default function StartScreen({ onImport, onScoutAfter }) {
         {note && !error && <p className="hero-note">{note}</p>}
 
         <div className="action-cards">
-          <button type="button" disabled={!!busy} onClick={() => run({ source: 'demo', username: 'demo_player', colour }, 'demo')}>
+          <button type="button" disabled={!!busy} onClick={() => run({ source: 'demo', username: 'demo_player' }, 'demo')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7V5z" /></svg>
             <strong>{busy === 'demo' ? 'Loading…' : 'Demo game'}</strong>
             <small>Try it, no login</small>
@@ -144,7 +136,7 @@ export default function StartScreen({ onImport, onScoutAfter }) {
           </button>
         </div>
         <input ref={fileInput} type="file" accept=".pgn,text/plain" hidden onChange={(e) => pickFile(e.target.files?.[0])} />
-        <p className="fine-print">Only finished public games are read.</p>
+        <p className="fine-print">We analyse your White and Black games together. Only finished public games are read.</p>
       </form>
     </section>
   )

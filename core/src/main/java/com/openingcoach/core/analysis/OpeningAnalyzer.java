@@ -170,6 +170,61 @@ public final class OpeningAnalyzer {
         return 0;
     }
 
+    // ================================================================== highlights (quickest wins)
+
+    public record Highlight(String white, String black, String opponent, Integer opponentElo, String date,
+                            String site, int moves, boolean mate, List<String> sanMoves, String event) {
+    }
+
+    public record HighlightsResult(List<Highlight> games, int candidates, long selectComparisons) {
+    }
+
+    /**
+     * The player's k best wins of 10+ moves: checkmates first, then stronger opponents, then shorter games. Picked with
+     * randomized Quickselect over all wins, then only those k are sorted.
+     */
+    public HighlightsResult highlights(int k, int minOpponentElo) {
+        if (k <= 0) {
+            throw new IllegalArgumentException("k must be positive");
+        }
+        boolean w = rep.white();
+        record Win(com.openingcoach.core.pgn.PgnGame g, int plies, int oppElo, boolean mate) {
+        }
+        List<Win> wins = new ArrayList<>();
+        for (ReplayedGame rg : rep.games()) {
+            if (rg.result().pointsFor(w) < 1.0) {
+                continue;
+            }
+            int opp = rg.source().elo(!w);
+            if (minOpponentElo > 0 && opp < minOpponentElo) {
+                continue;
+            }
+            int plies = rg.source().sanMoves().size();
+            if (plies < 20) {
+                continue; // under 10 moves is usually a resignation or flag, not a real game
+            }
+            List<String> raw = rg.source().sanMoves();
+            wins.add(new Win(rg.source(), plies, opp, raw.get(raw.size() - 1).contains("#")));
+        }
+        // best = finished with checkmate first, then the strongest opponent, then the shortest
+        Comparator<Win> quickest = Comparator.comparingInt((Win x) -> x.mate() ? 0 : 1)
+                .thenComparingInt(x -> -x.oppElo()).thenComparingInt(Win::plies);
+        RandomizedSelect select = new RandomizedSelect(seed);
+        List<Win> top = select.smallestK(wins, Math.min(k, wins.size()), quickest);
+        new RandomizedQuickSort(seed).sort(top, quickest);
+        List<Highlight> out = new ArrayList<>();
+        for (Win win : top) {
+            GameReplayer.Outcome o = GameReplayer.replay(win.g(), 600);
+            if (!o.ok()) {
+                continue;
+            }
+            out.add(new Highlight(win.g().white(), win.g().black(), w ? win.g().black() : win.g().white(),
+                    win.oppElo() > 0 ? win.oppElo() : null, win.g().tag("Date"), win.g().tag("Site"),
+                    (win.plies() + 1) / 2, win.mate(), o.game().sanMoves(), win.g().tag("Event")));
+        }
+        return new HighlightsResult(out, wins.size(), select.comparisons());
+    }
+
     // ================================================================== repertoire (top lines)
 
     public record TopLine(List<String> path, String line, int games, double share, Double score) {

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { api, pct } from '../api.js'
 import LineReplay from './LineReplay.jsx'
 import ScoreBar from './ScoreBar.jsx'
+import PageHeader from './PageHeader.jsx'
+import ErrorCard from './ErrorCard.jsx'
 
 /** Lines where the player loses the most points compared with strong players. */
 export default function WeakLines({ analysis, openOnBoard, onTiming, who = 'you', name }) {
@@ -9,6 +11,7 @@ export default function WeakLines({ analysis, openOnBoard, onTiming, who = 'you'
   const [minGames, setMinGames] = useState(3)
   const [selected, setSelected] = useState(0)
   const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
   const them = who === 'them'
 
   useEffect(() => {
@@ -20,9 +23,9 @@ export default function WeakLines({ analysis, openOnBoard, onTiming, who = 'you'
         onTiming?.(them ? 'Opponent weak lines' : 'Weak lines', res)
       })
       .catch((e) => setError(e.message))
-  }, [analysis.id, minGames])
+  }, [analysis.id, minGames, attempt])
 
-  if (error) return <p className="error">{error}</p>
+  if (error) return <ErrorCard message={error} onRetry={() => { setError(''); setData(null); setAttempt((a) => a + 1) }} />
   if (!data) return <div className="skeleton" />
   const { lines, candidates, redundantSkipped } = data.result
   const sel = lines[selected]
@@ -30,19 +33,21 @@ export default function WeakLines({ analysis, openOnBoard, onTiming, who = 'you'
 
   return (
     <div>
-      <div className="section-head">
-        <div>
-          <h2>{them ? `Where ${name} loses the most` : 'Where you lose the most'}</h2>
-          <p className="muted">
-            Lines where {them ? 'they score' : 'you score'} worse than strong players did from the same position,
-            weighted by how often {them ? 'they' : 'you'} played them.
-          </p>
-        </div>
-        <label className="field narrow">
-          <span>Played at least</span>
-          <input type="number" min="1" max="100" value={minGames} onChange={(e) => setMinGames(Number(e.target.value) || 1)} aria-label="Minimum games" />
-        </label>
-      </div>
+      <PageHeader
+        small={them}
+        kicker={them ? `${name}’s weak lines` : 'Weak lines'}
+        title={them ? `Where ${name} keeps getting` : 'Where you keep getting'}
+        accent="forked."
+        aside={
+          <label className="field narrow">
+            <span>Played at least</span>
+            <input type="number" min="1" max="100" value={minGames} onChange={(e) => setMinGames(Number(e.target.value) || 1)} aria-label="Minimum games" />
+          </label>
+        }
+      >
+        Lines where {them ? 'they score' : 'you score'} worse than strong players from the same position, weighted by
+        how often {them ? 'they' : 'you'} play them. Pick one to see it on the board.
+      </PageHeader>
 
       {!lines.length ? (
         <p className="empty">No line where {them ? 'they lose' : 'you lose'} points compared with strong players. Try lowering the minimum games.</p>

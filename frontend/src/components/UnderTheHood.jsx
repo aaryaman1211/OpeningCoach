@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import PageHeader from './PageHeader.jsx'
 
 function size(bytes) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`
@@ -15,10 +16,9 @@ export default function UnderTheHood({ timings }) {
   return (
     <div className="stack" style={{ gap: 28, maxWidth: 900 }}>
       <section>
-        <h2 style={{ marginBottom: 8 }}>How it works</h2>
-        <p className="muted" style={{ marginBottom: 12 }}>
-          All of the analysis runs in Java on the server. The browser only shows the results.
-        </p>
+        <PageHeader kicker="How it works" title="Under the" accent="board.">
+          Every result is computed in Java on the server. The browser only draws it.
+        </PageHeader>
         <table className="plain">
           <thead>
             <tr><th>Screen</th><th>Algorithm</th><th>What it does</th></tr>

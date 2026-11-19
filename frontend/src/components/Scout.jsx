@@ -5,6 +5,7 @@ import ImportPanel from './ImportPanel.jsx'
 import LineReplay from './LineReplay.jsx'
 import ScoreBar from './ScoreBar.jsx'
 import WeakLines from './WeakLines.jsx'
+import PageHeader from './PageHeader.jsx'
 
 const VIEWS = [
   { id: 'plan', label: 'Game plan' },
@@ -14,7 +15,7 @@ const VIEWS = [
 ]
 
 /** Opponent preparation. */
-export default function Scout({ analysis, opponent, setOpponent, onTiming }) {
+export default function Scout({ analysis, opponent, oppPair, loadOpponent, onTiming }) {
   const [view, setView] = useState('plan')
   const [path, setPath] = useState([])
   const [changing, setChanging] = useState(false)
@@ -22,8 +23,7 @@ export default function Scout({ analysis, opponent, setOpponent, onTiming }) {
   const theirColour = yourColour === 'white' ? 'black' : 'white'
 
   async function load(req) {
-    const o = await api.createAnalysis(req)
-    setOpponent(o)
+    await loadOpponent(req)
     setChanging(false)
     setPath([])
     setView('plan')
@@ -34,17 +34,16 @@ export default function Scout({ analysis, opponent, setOpponent, onTiming }) {
     setView('board')
   }
 
-  if (!opponent || changing) {
+  if (!oppPair || changing) {
     return (
       <div style={{ maxWidth: 560 }}>
-        <h2 style={{ marginBottom: 6 }}>Prepare for an opponent</h2>
-        <p className="muted" style={{ marginBottom: 16 }}>
-          Load your next opponent’s games. You will see what they play, where they struggle, which of your lines meet
-          their weak spots, and how your game is likely to start. You are playing {yourColour}, so load their{' '}
-          {theirColour} games.
-        </p>
-        <ImportPanel onImport={load} opponent defaultColour={theirColour} submitLabel="Load opponent"
-                     onCancel={opponent ? () => setChanging(false) : null} />
+        <PageHeader kicker="Opponent prep" title="Know your" accent="rival.">
+          Load your next opponent’s games to see what they play, where they struggle, which of your lines hit their weak
+          spots, and how your game will probably start. Both of their colours are analysed: while you look at your{' '}
+          {yourColour} games you see their {theirColour} games, and the White/Black switch at the top flips both.
+        </PageHeader>
+        <ImportPanel onImport={load} opponent submitLabel="Load opponent"
+                     onCancel={oppPair ? () => setChanging(false) : null} />
       </div>
     )
   }
@@ -52,12 +51,10 @@ export default function Scout({ analysis, opponent, setOpponent, onTiming }) {
   const s = opponent.summary
   return (
     <div>
-      <div className="opp-bar">
-        <span>
-          Opponent: <strong>{s.player}</strong> <span className="muted">as {s.colour} · {s.games} games · scored {pct(s.score)}</span>
-        </span>
-        <button onClick={() => setChanging(true)}>Change opponent</button>
-      </div>
+      <PageHeader kicker="Opponent prep" title={`${s.player} plays`} accent={`${s.colour}.`}
+                  aside={<button className="pill-btn" onClick={() => setChanging(true)}>Change opponent</button>}>
+        {s.games} games scouted, scoring {pct(s.score)}. Here is how to meet them.
+      </PageHeader>
 
       <div className="subtabs" role="tablist">
         {VIEWS.map((v) => (

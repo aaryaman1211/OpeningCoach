@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import { api, pct } from '../api.js'
 import PositionPreview from './PositionPreview.jsx'
 import ScoreBar from './ScoreBar.jsx'
+import PageHeader from './PageHeader.jsx'
+import ErrorCard from './ErrorCard.jsx'
 
 /** Where games leave the positions strong players have reached. */
 export default function OutOfBook({ analysis, openOnBoard, onTiming }) {
   const [data, setData] = useState(null)
   const [selected, setSelected] = useState(0)
   const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     api.outOfBook(analysis.id, 12)
@@ -16,9 +19,9 @@ export default function OutOfBook({ analysis, openOnBoard, onTiming }) {
         onTiming('Leaving theory', res)
       })
       .catch((e) => setError(e.message))
-  }, [analysis.id])
+  }, [analysis.id, attempt])
 
-  if (error) return <p className="error">{error}</p>
+  if (error) return <ErrorCard message={error} onRetry={() => { setError(''); setAttempt((a) => a + 1) }} />
   if (!data) return <div className="skeleton" />
   const r = data.result
   const a = data.algorithm
@@ -27,15 +30,16 @@ export default function OutOfBook({ analysis, openOnBoard, onTiming }) {
 
   return (
     <div>
-      <div className="section-head">
-        <div>
-          <h2>Where your games leave theory</h2>
-          <p className="muted">
-            In {left} of {r.gamesAnalysed} games, someone played a move strong players never reached within the first
-            10 moves: you first in {r.youLeft}, your opponent first in {r.opponentLeft}.
-            {r.averageExitPly != null && ` On average this happens around move ${Math.ceil(r.averageExitPly / 2)}.`}
-          </p>
-        </div>
+      <PageHeader kicker="Leaving theory" title="Off the" accent="book.">
+        In {left} of {r.gamesAnalysed} games, someone played a move strong players never reached within the first 10
+        moves: you first in {r.youLeft}, your opponent first in {r.opponentLeft}.
+        {r.averageExitPly != null && ` It usually happens around move ${Math.ceil(r.averageExitPly / 2)}.`}
+      </PageHeader>
+      <div className="stat-strip">
+        <div><strong>{r.gamesAnalysed}</strong><span>games</span></div>
+        <div><strong>{r.youLeft}</strong><span>you left first</span></div>
+        <div><strong>{r.opponentLeft}</strong><span>they left first</span></div>
+        <div><strong>{r.averageExitPly == null ? '–' : Math.ceil(r.averageExitPly / 2)}</strong><span>average exit move</span></div>
       </div>
 
       {!r.exits.length ? (

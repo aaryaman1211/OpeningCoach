@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, pct } from '../api.js'
 import ChessBoard, { parseFen } from './ChessBoard.jsx'
 import ScoreBar from './ScoreBar.jsx'
+import PageHeader from './PageHeader.jsx'
+import ErrorCard from './ErrorCard.jsx'
 import { Arrows, First, Flip, Last, Next, Pause, Play, Prev, SoundOff, SoundOn } from './Icons.jsx'
 import { isMuted, playMove, setMuted } from '../sound.js'
 
@@ -12,12 +14,20 @@ import { isMuted, playMove, setMuted } from '../sound.js'
 export default function Explorer({ analysis, path, setPath, onTiming, who = 'you', name }) {
   const [view, setView] = useState(null)
   const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
   const [line, setLine] = useState(path)
   const [flipped, setFlipped] = useState(false)
   const [showArrows, setShowArrows] = useState(true)
   const [hoverSan, setHoverSan] = useState(null)
   const [playing, setPlaying] = useState(false)
   const [muted, setMutedState] = useState(isMuted())
+  const [view3d, setView3d] = useState(() => {
+    try { return localStorage.getItem('oc-board3d') !== 'flat' } catch { return true }
+  })
+  function pickView(v) {
+    setView3d(v)
+    try { localStorage.setItem('oc-board3d', v ? '3d' : 'flat') } catch { /* ignore */ }
+  }
   const cache = useRef(new Map())
   const prevFen = useRef(null)
   const white = analysis.summary.colour === 'white'
@@ -49,7 +59,7 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
     return () => {
       live = false
     }
-  }, [analysis.id, path.join(',')])
+  }, [analysis.id, path.join(','), attempt])
 
   useEffect(() => {
     if (!view) return
@@ -94,8 +104,23 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
     return () => clearTimeout(t)
   }, [playing, nextMove, path.join(',')])
 
-  if (error) return <p className="error">{error} <button className="link" onClick={() => setPath([])}>Back to start</button></p>
-  if (!view) return <div className="boardview"><div className="skeleton board-skel" /><div /></div>
+  const header = (
+    <PageHeader small={who !== 'you'} kicker={who === 'you' ? 'Board' : `${name}’s games`}
+                title={who === 'you' ? 'Your opening' : `${name}’s opening`} accent="tree.">
+      Drag or click pieces to try any move. Arrows show the most played moves: green for strong players,{' '}
+      {who === 'you' ? 'blue for you' : `orange for ${name}`}.
+    </PageHeader>
+  )
+  if (error) {
+    return (
+      <>
+        {header}
+        <ErrorCard message={error} onRetry={() => { setError(''); setAttempt((a) => a + 1) }} />
+        <p style={{ marginTop: 10 }}><button className="link" onClick={() => { setError(''); setPath([]) }}>Back to the start position</button></p>
+      </>
+    )
+  }
+  if (!view) return <>{header}<div className="boardview"><div className="skeleton board-skel" /><div /></div></>
 
   const arrows = []
   if (showArrows) {
@@ -108,6 +133,8 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
   if (hovered) arrows.push({ from: hovered.from, to: hovered.to, color: 'pred', opacity: 0.9, width: 0.15 })
 
   return (
+    <>
+    {header}
     <div className="boardview">
       <div>
         <ChessBoard
@@ -118,6 +145,7 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
           legalMoves={view.legalMoves}
           onMove={(san) => setPath([...path, san])}
           arrows={arrows}
+          tilt={view3d ? 36 : 0}
         />
         <div className="controls">
           <button className="icon" onClick={() => setPath([])} disabled={!path.length} title="Start (Home)" aria-label="Go to start"><First /></button>
@@ -131,6 +159,10 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
           <span className="gap" />
           <button className="icon" onClick={() => setFlipped((f) => !f)} title="Flip board" aria-label="Flip board"><Flip /></button>
           <button className={`icon ${showArrows ? 'on' : ''}`} onClick={() => setShowArrows((v) => !v)} title="Show arrows" aria-label="Show arrows" aria-pressed={showArrows}><Arrows /></button>
+          <span className="view-switch" role="radiogroup" aria-label="Board view">
+            <button role="radio" aria-checked={view3d} className={view3d ? 'on' : ''} onClick={() => pickView(true)}>3D</button>
+            <button role="radio" aria-checked={!view3d} className={view3d ? '' : 'on'} onClick={() => pickView(false)}>Flat</button>
+          </span>
           <button className={`icon ${muted ? '' : 'on'}`} onClick={() => { setMuted(!muted); setMutedState(!muted) }} title="Move sounds" aria-label="Move sounds" aria-pressed={!muted}>
             {muted ? <SoundOff /> : <SoundOn />}
           </button>
@@ -218,5 +250,6 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
         </p>
       </div>
     </div>
+    </>
   )
 }
