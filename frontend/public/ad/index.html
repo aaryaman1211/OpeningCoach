@@ -25,11 +25,13 @@
   <canvas id="c" width="1920" height="1080" aria-label="OpeningCoach video ad"></canvas>
   <div class="bar">
     <button id="play">Pause</button>
+    <button id="sound">Sound on</button>
     <button id="restart">Restart</button>
     <input id="seek" type="range" min="0" max="45" step="0.01" value="0" aria-label="Seek">
     <span class="t" id="time">0.0 s</span>
   </div>
 </div>
+<script src="mp4-muxer.js"></script>
 <script>
 // ------------------------------------------------------------------ setup
 const C = document.getElementById('c'), X = C.getContext('2d')
@@ -411,14 +413,15 @@ const seek = document.getElementById('seek'), time = document.getElementById('ti
 function now() { return playing ? offset + (performance.now() - t0) / 1000 : offset }
 function frame() {
   let t = now()
-  if (t >= T) { if (window.__recording) { t = T } else { offset = 0; t0 = performance.now(); t = 0 } }
+  if (t >= T) { if (window.__recording) { t = T } else { offset = 0; t0 = performance.now(); t = 0; syncSound() } }
   render(t)
   seek.value = t.toFixed(2); time.textContent = `${t.toFixed(1)} s`
   requestAnimationFrame(frame)
 }
-playBtn.onclick = () => { if (playing) { offset = now(); playing = false; playBtn.textContent = 'Play' } else { t0 = performance.now(); playing = true; playBtn.textContent = 'Pause' } }
-document.getElementById('restart').onclick = () => { offset = 0; t0 = performance.now(); playing = true; playBtn.textContent = 'Pause' }
+playBtn.onclick = () => { if (playing) { offset = now(); playing = false; playBtn.textContent = 'Play' } else { t0 = performance.now(); playing = true; playBtn.textContent = 'Pause' } syncSound() }
+document.getElementById('restart').onclick = () => { offset = 0; t0 = performance.now(); playing = true; playBtn.textContent = 'Pause'; syncSound() }
 seek.oninput = () => { offset = +seek.value; t0 = performance.now() }
+seek.onchange = () => syncSound()
 
 window.renderAt = (t) => render(t)
 // Records the whole ad in real time from the canvas; resolves with base64 video and its mime type.
@@ -443,6 +446,179 @@ window.recordVideo = async () => {
   let bin = ''
   for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
   return { mime, base64: btoa(bin), bytes: buf.length }
+}
+
+// ------------------------------------------------------------------ soundtrack: synthesised music + narration
+// Everything is generated here (no music files): pad, bass, plucks, drums and a logo hit,
+// with the music ducked under the voice. Rendered offline so audio and video line up exactly.
+const SR = 48000
+let MIX = null
+async function buildMix() {
+  if (MIX) return MIX
+  const ctx = new OfflineAudioContext(2, Math.ceil(SR * T), SR)
+  const master = ctx.createDynamicsCompressor()
+  master.threshold.value = -10; master.ratio.value = 4; master.attack.value = 0.005; master.release.value = 0.2
+  // brick-wall-ish limiter and a little headroom so nothing clips
+  const limiter = ctx.createDynamicsCompressor()
+  limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.1
+  const out = ctx.createGain(); out.gain.value = 0.85
+  master.connect(limiter); limiter.connect(out); out.connect(ctx.destination)
+  const music = ctx.createGain(); music.gain.value = 0.0; music.connect(master)
+  const voiceBus = ctx.createGain(); voiceBus.gain.value = 1.15; voiceBus.connect(master)
+
+  const narration = await (await fetch('audio/narration.json')).json()
+  // music level: fade in, duck under each narration line, fade out at the end
+  const g = music.gain
+  g.setValueAtTime(0, 0); g.linearRampToValueAtTime(0.55, 1.2)
+  for (const n of narration) {
+    g.setTargetAtTime(0.26, n.start - 0.15, 0.06)
+    g.setTargetAtTime(0.55, n.start + n.dur + 0.05, 0.25)
+  }
+  g.setTargetAtTime(0.0, T - 2.2, 0.6)
+
+  const beat = 60 / 96, bar = beat * 4
+  const chords = [[220, 261.63, 329.63], [174.61, 220, 261.63], [261.63, 329.63, 392], [196, 246.94, 293.66]]
+  const roots = [110, 87.31, 130.81, 98]
+  const chordAt = (t) => Math.floor(t / (bar * 2)) % 4
+  const drumsOn = (t) => (t >= 4.6 && t < 9.2) || (t >= 9.9 && t < 40.6)
+
+  function osc(type, freq, t0, dur, gain, dest, opts = {}) {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq; if (opts.detune) o.detune.value = opts.detune
+    const a = ctx.createGain(); a.gain.setValueAtTime(0, t0)
+    a.gain.linearRampToValueAtTime(gain, t0 + (opts.attack ?? 0.01))
+    a.gain.setTargetAtTime(0, t0 + dur, opts.release ?? 0.08)
+    o.connect(a); a.connect(dest); o.start(t0); o.stop(t0 + dur + 1.2)
+    return o
+  }
+  // pad: three detuned saws per chord through a soft low-pass, panned wide
+  const padF = ctx.createBiquadFilter(); padF.type = 'lowpass'; padF.frequency.value = 900; padF.Q.value = 0.6; padF.connect(music)
+  for (let t = 0; t < T; t += bar * 2) {
+    const ch = chords[chordAt(t + 0.01)]
+    ch.forEach((f, i) => {
+      const pan = ctx.createStereoPanner(); pan.pan.value = [-0.6, 0, 0.6][i]; pan.connect(padF)
+      osc('sawtooth', f, t, bar * 2 - 0.05, 0.065, pan, { attack: 0.6, release: 0.5, detune: -7 })
+      osc('sawtooth', f, t, bar * 2 - 0.05, 0.065, pan, { attack: 0.6, release: 0.5, detune: 7 })
+    })
+  }
+  // plucked arpeggio on eighth notes
+  const pl = ctx.createBiquadFilter(); pl.type = 'lowpass'; pl.frequency.value = 2400; pl.connect(music)
+  for (let i = 0, t = 0; t < T - 3; i++, t = i * beat / 2) {
+    const ch = chords[chordAt(t)], f = ch[[0, 1, 2, 1][i % 4]] * 2
+    osc('triangle', f, t, 0.12, t < 4.6 ? 0.05 : 0.07, pl, { release: 0.09 })
+  }
+  // bass on beats 1 and 3
+  for (let i = 0, t = 0; t < T - 3; i++, t = i * beat * 2) {
+    if (t < 4.6) continue
+    osc('triangle', roots[chordAt(t)], t, beat * 1.6, 0.32, music, { attack: 0.02, release: 0.12 })
+  }
+  // drums
+  const noise = ctx.createBuffer(1, SR, SR); const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1
+  function kick(t, level = 0.9) {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14)
+    const a = ctx.createGain(); a.gain.setValueAtTime(level, t); a.gain.exponentialRampToValueAtTime(0.001, t + 0.32)
+    o.connect(a); a.connect(music); o.start(t); o.stop(t + 0.4)
+  }
+  function hat(t, level = 0.12) {
+    const src = ctx.createBufferSource(); src.buffer = noise
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7500
+    const a = ctx.createGain(); a.gain.setValueAtTime(level, t); a.gain.exponentialRampToValueAtTime(0.001, t + 0.05)
+    src.connect(hp); hp.connect(a); a.connect(music); src.start(t, Math.random() * 0.5); src.stop(t + 0.06)
+  }
+  function snare(t, level = 0.25) {
+    const src = ctx.createBufferSource(); src.buffer = noise
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 0.8
+    const a = ctx.createGain(); a.gain.setValueAtTime(level, t); a.gain.exponentialRampToValueAtTime(0.001, t + 0.18)
+    src.connect(bp); bp.connect(a); a.connect(music); src.start(t, Math.random() * 0.5); src.stop(t + 0.2)
+  }
+  for (let i = 0, t = 0; t < T; i++, t = i * beat / 2) {
+    if (!drumsOn(t)) continue
+    if (i % 2 === 0) kick(t, i % 4 === 0 ? 0.7 : 0.45)
+    if (i % 4 === 2) snare(t)
+    hat(t, i % 2 ? 0.08 : 0.12)
+  }
+  // riser into the logo, then a deep hit when it lands
+  const rise = ctx.createBufferSource(); rise.buffer = noise; rise.loop = true
+  const rf = ctx.createBiquadFilter(); rf.type = 'bandpass'; rf.Q.value = 1.5
+  rf.frequency.setValueAtTime(400, 8.0); rf.frequency.exponentialRampToValueAtTime(6000, 9.55)
+  const ra = ctx.createGain(); ra.gain.setValueAtTime(0, 8.0); ra.gain.linearRampToValueAtTime(0.22, 9.5); ra.gain.linearRampToValueAtTime(0, 9.6)
+  rise.connect(rf); rf.connect(ra); ra.connect(music); rise.start(8.0); rise.stop(9.7)
+  for (const [t, lv] of [[9.6, 1.0], [41.0, 0.8]]) {
+    kick(t, lv)
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 55
+    const a = ctx.createGain(); a.gain.setValueAtTime(0.5 * lv, t); a.gain.exponentialRampToValueAtTime(0.001, t + 1.8)
+    o.connect(a); a.connect(music); o.start(t); o.stop(t + 2)
+  }
+  // a soft "tick" each time a piece lands in the opening scenes
+  for (const t of [5.6, 6.6, 7.6, 42.0, 42.8]) osc('square', 1800, t, 0.015, 0.05, music, { release: 0.02 })
+
+  // narration clips
+  for (const n of narration) {
+    const buf = await ctx.decodeAudioData(await (await fetch(`audio/${n.id}.wav`)).arrayBuffer())
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(voiceBus); src.start(n.start)
+  }
+  MIX = await ctx.startRendering()
+  return MIX
+}
+
+// live preview with sound
+let liveCtx = null, liveSrc = null, soundOn = false
+function stopSound() { try { liveSrc?.stop() } catch { /* already stopped */ } liveSrc = null }
+async function syncSound() {
+  stopSound()
+  if (!soundOn || !playing) return
+  const mix = await buildMix()
+  liveCtx = liveCtx || new AudioContext({ sampleRate: SR })
+  await liveCtx.resume()
+  liveSrc = liveCtx.createBufferSource(); liveSrc.buffer = mix; liveSrc.connect(liveCtx.destination)
+  liveSrc.start(0, Math.min(now(), T - 0.01))
+}
+document.getElementById('sound').onclick = async (e) => { soundOn = !soundOn; e.target.textContent = soundOn ? 'Sound off' : 'Sound on'; await syncSound() }
+
+// ------------------------------------------------------------------ frame-exact export (no lag)
+// Renders every frame at its exact time and encodes it with WebCodecs, so the video never
+// stutters however long a frame takes to draw. Audio is the offline mix, encoded alongside.
+window.encodeVideo = async (fps = 30) => {
+  await document.fonts.ready
+  await Promise.all(Object.values(PIECES).map((i) => (i.complete ? 0 : new Promise((r) => (i.onload = r)))))
+  playing = false
+  const mix = await buildMix()
+  const vcfg = { codec: 'avc1.640028', width: W, height: H, bitrate: 12_000_000, framerate: fps }
+  if (!(await VideoEncoder.isConfigSupported(vcfg)).supported) throw new Error('H.264 encoding not supported')
+  let acodec = 'aac', acfg = { codec: 'mp4a.40.2', sampleRate: SR, numberOfChannels: 2, bitrate: 192_000 }
+  if (!(await AudioEncoder.isConfigSupported(acfg)).supported) { acodec = 'opus'; acfg = { codec: 'opus', sampleRate: SR, numberOfChannels: 2, bitrate: 192_000 } }
+  const muxer = new Mp4Muxer.Muxer({
+    target: new Mp4Muxer.ArrayBufferTarget(),
+    video: { codec: 'avc', width: W, height: H, frameRate: fps },
+    audio: { codec: acodec, numberOfChannels: 2, sampleRate: SR },
+    fastStart: 'in-memory',
+  })
+  const venc = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { throw e } })
+  venc.configure(vcfg)
+  const total = Math.round(T * fps)
+  for (let i = 0; i < total; i++) {
+    render(i / fps)
+    const frame = new VideoFrame(C, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
+    venc.encode(frame, { keyFrame: i % (fps * 2) === 0 })
+    frame.close()
+    if (venc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0))
+  }
+  await venc.flush()
+
+  const aenc = new AudioEncoder({ output: (c, m) => muxer.addAudioChunk(c, m), error: (e) => { throw e } })
+  aenc.configure(acfg)
+  const L = mix.getChannelData(0), R = mix.getChannelData(1), step = 1024
+  for (let off = 0; off < mix.length; off += step) {
+    const n = Math.min(step, mix.length - off)
+    const planar = new Float32Array(n * 2); planar.set(L.subarray(off, off + n), 0); planar.set(R.subarray(off, off + n), n)
+    const data = new AudioData({ format: 'f32-planar', sampleRate: SR, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((off * 1e6) / SR), data: planar })
+    aenc.encode(data); data.close()
+  }
+  await aenc.flush()
+  muxer.finalize()
+  const buf = new Uint8Array(muxer.target.buffer)
+  let bin = ''
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
+  return { mime: `video/mp4 (h264 + ${acodec})`, base64: btoa(bin), bytes: buf.length }
 }
 
 document.fonts.ready.then(() => requestAnimationFrame(frame))

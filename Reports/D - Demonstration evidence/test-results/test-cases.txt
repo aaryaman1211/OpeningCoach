@@ -1,0 +1,92 @@
+mvn test: 78 tests, 0 failed
+
+AnalysisApiTest  (2 tests, 0 failed, 4.145 s)
+   [pass] fullWorkflowWorks
+   [pass] invalidInputsGiveProblemDetails
+MatchupTest  (5 tests, 0 failed, 0.028 s)
+   [pass] bestWeaponIsTheAdvanceVariation
+   [pass] predictedGameFollowsEachSidesFavourite
+   [pass] onlySharedLinesAreVisited
+   [pass] dangersContainTheItalian
+   [pass] sameColoursAndBadParametersAreRejected
+OpeningAnalyzerTest  (7 tests, 0 failed, 0.154 s)
+   [pass] explorerMergesYourMovesWithReferenceMoves
+   [pass] weakestLineIsTheScandinavianBishopMove
+   [pass] outOfBookFindsTheMoveStrongPlayersNeverPlayed
+   [pass] studyPlanCoversWeakLinesAndRespectsBudget
+   [pass] importKeepsOnlyThePlayersGamesWithTheChosenColour
+   [pass] playerWithNoGamesGivesEmptyResultsNotErrors
+   [pass] invalidParametersAreRejected
+BloomFilterTest  (7 tests, 0 failed, 0.169 s)
+   [pass] neverGivesFalseNegatives
+   [pass] rejectsInvalidParameters
+   [pass] serialisationRoundTrip
+   [pass] sizingFormulasMatchTheTextbook
+   [pass] tinyFilterSaturatesButStaysCorrect
+   [pass] emptyFilterContainsNothing
+   [pass] falsePositiveRateMatchesTheory
+BoardTest  (12 tests, 0 failed, 0.019 s)
+   [pass] illegalMovesAreRejected
+   [pass] promotionWithAndWithoutEqualsSign
+   [pass] pinnedPieceIsNotAmbiguous
+   [pass] enPassantCapture
+   [pass] transpositionsGiveTheSameKey
+   [pass] checkAndAnnotationSymbolsAreIgnored
+   [pass] ambiguousMoveIsRejected
+   [pass] sideToMoveChangesTheKey
+   [pass] startPositionRoundTripsThroughFen
+   [pass] explicitDisambiguation
+   [pass] castlingBothSides
+   [pass] cannotCastleThroughCheck
+LegalMovesTest  (7 tests, 0 failed, 0.082 s)
+   [pass] perftPosition4Promotions
+   [pass] lastMoveSquaresAreTracked
+   [pass] perftFromStartPosition
+   [pass] perftKiwipete
+   [pass] sanUsesMinimalDisambiguation
+   [pass] perftPosition3EnPassantAndPins
+   [pass] checkmateAndStalemateHaveNoMoves
+CoverageSolverTest  (8 tests, 0 failed, 0.059 s)
+   [pass] uncoverableElementsAreReportedNotIgnored
+   [pass] greedyCanBeWorseThanOptimalButWithinHarmonicBound
+   [pass] invalidInputsAreRejected
+   [pass] budgetIsNeverExceededAndZeroBudgetChoosesNothing
+   [pass] greedyCoverCoversEverythingCoverable
+   [pass] randomInstancesRespectApproximationBounds
+   [pass] bestSingleSetBeatsRatioGreedyWhenItShould
+   [pass] emptyInstance
+PgnParserTest  (6 tests, 0 failed, 0.024 s)
+   [pass] readsTagsMovesAndSkipsCommentsAndVariations
+   [pass] movetextWithoutHeadersIsStillAGame
+   [pass] chess960AndCustomStartsAreFlagged
+   [pass] replayStopsAtMaxPlyAndRecordsOneKeyPerPly
+   [pass] emptyInputGivesNoGames
+   [pass] illegalMoveIsReportedNotHidden
+ReferenceIndexTest  (5 tests, 0 failed, 0.644 s)
+   [pass] movesAreSortedByPopularityAndLeadToTheRightPosition(Path)
+   [pass] lookupsMatchBruteForceCounts(Path)
+   [pass] unknownPositionsAreAbsentAndMostNeverTouchDisk(Path)
+   [pass] ratingFilterAndEmptyInput(Path)
+   [pass] bloomGateNeverChangesAnswers(Path)
+RandomizedQuickSortTest  (5 tests, 0 failed, 0.059 s)
+   [pass] sortedAndReversedInputsStayNearTwoNLnN
+   [pass] boundaryInputs
+   [pass] agreesWithCollectionsSortOnManyRandomInputs
+   [pass] customComparatorSortsDescendingByScoreAndKeepsAllItems
+   [pass] allEqualKeysTakeLinearComparisons
+RandomizedSelectTest  (7 tests, 0 failed, 0.273 s)
+   [pass] allEqualElements
+   [pass] smallestKReturnsExactlyTheKSmallest
+   [pass] agreesWithSortingForEveryRankOnRandomInputs
+   [pass] singleElementAndBoundaries
+   [pass] percentileUsesNearestRank
+   [pass] sortedInputStaysLinearInExpectation
+   [pass] quickSortSortsAndCountsAboutTwoNLnN
+OpeningTrieTest  (7 tests, 0 failed, 1.766 s)
+   [pass] missingLineReturnsNull
+   [pass] countsGamesAndResultsAlongEachLine
+   [pass] pathAndPositionKeyMatchAReplay
+   [pass] insertionStopsAtMaxPly
+   [pass] emptyPathIsTheRoot
+   [pass] rejectsBadInput
+   [pass] matchesLinearScanOnRandomGames

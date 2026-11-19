@@ -1,0 +1,12 @@
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.145 s -- in com.openingcoach.api.AnalysisApiTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.028 s -- in com.openingcoach.core.analysis.MatchupTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.154 s -- in com.openingcoach.core.analysis.OpeningAnalyzerTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.169 s -- in com.openingcoach.core.bloom.BloomFilterTest
+Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.019 s -- in com.openingcoach.core.chess.BoardTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.082 s -- in com.openingcoach.core.chess.LegalMovesTest
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.059 s -- in com.openingcoach.core.cover.CoverageSolverTest
+Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.024 s -- in com.openingcoach.core.pgn.PgnParserTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.644 s -- in com.openingcoach.core.reference.ReferenceIndexTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.059 s -- in com.openingcoach.core.select.RandomizedQuickSortTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.273 s -- in com.openingcoach.core.select.RandomizedSelectTest
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.766 s -- in com.openingcoach.core.trie.OpeningTrieTest

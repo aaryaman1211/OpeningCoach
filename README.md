@@ -54,7 +54,7 @@ Manual steps, if you prefer:
 
 ```bash
 cd frontend && npm install && npm run build && cd ..   # writes the UI into api/src/main/resources/static
-mvn install                                           # builds and runs the 73 tests
+mvn install                                           # builds and runs the 78 tests
 java -jar api/target/openingcoach-api-1.0.0.jar
 ```
 
@@ -103,7 +103,7 @@ curl -s -X POST localhost:8080/api/analyses -H 'Content-Type: application/json' 
 
 ## Tests
 
-`mvn test` runs 73 tests:
+`mvn test` runs 78 tests:
 
 | Class | Tests | Highlights |
 |---|---|---|
@@ -113,6 +113,7 @@ curl -s -X POST localhost:8080/api/analyses -H 'Content-Type: application/json' 
 | `PgnParserTest` | 6 | comments, nested variations, Chess960 rejected, illegal move reported with ply |
 | `OpeningTrieTest` | 7 | counts, maxPly boundary, bad input, 500 random prefixes checked against a brute-force scan |
 | `BloomFilterTest` | 7 | no false negatives on 100k keys, measured FPP within 5σ of theory, sizing formulas, saturation boundary, serialisation |
+| `RandomizedQuickSortTest` | 5 | 300 random inputs vs `Collections.sort`, 1–2 elements and int extremes, all-equal keys in exactly n comparisons, sorted/reversed input near 2n ln n, descending custom comparator |
 | `RandomizedSelectTest` | 7 | every rank vs sorting on 200 random arrays with duplicates, all-equal input, sorted input stays ~linear, comparisons ≈ 2n ln n |
 | `CoverageSolverTest` | 8 | a case where greedy is suboptimal (within H(d)), the best-single-set rescue, 300 random instances vs brute force respecting both bounds, uncoverable elements |
 | `ReferenceIndexTest` | 5 | disk lookups equal brute-force counts, Bloom gate never changes answers, observed FPP |

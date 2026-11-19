@@ -1,0 +1,72 @@
+[
+ {
+  "id": "n1",
+  "start": 0.6,
+  "dur": 2.12,
+  "speed": 1.0,
+  "text": "Every game starts the same way."
+ },
+ {
+  "id": "n2",
+  "start": 4.9,
+  "dur": 2.35,
+  "speed": 1.08,
+  "text": "So why do you keep losing by move ten?"
+ },
+ {
+  "id": "n3",
+  "start": 7.45,
+  "dur": 1.93,
+  "speed": 1.16,
+  "text": "Thirty-eight percent in the Sicilian."
+ },
+ {
+  "id": "n4",
+  "start": 9.9,
+  "dur": 3.66,
+  "speed": 1.0,
+  "text": "Meet OpeningCoach. Don't let your opening checkmate you."
+ },
+ {
+  "id": "n5",
+  "start": 14.1,
+  "dur": 5.43,
+  "speed": 1.14,
+  "text": "It maps every opening you play, and compares it with nearly twenty-two thousand strong games."
+ },
+ {
+  "id": "n6",
+  "start": 19.8,
+  "dur": 5.25,
+  "speed": 1.12,
+  "text": "It finds the lines where you keep getting forked, and shows exactly how many points they cost you."
+ },
+ {
+  "id": "n7",
+  "start": 25.3,
+  "dur": 5.15,
+  "speed": 1.08,
+  "text": "Then it builds a study plan that fits your time. One hour fixes more than half."
+ },
+ {
+  "id": "n8",
+  "start": 30.8,
+  "dur": 4.6,
+  "speed": 1.13,
+  "text": "Got a big game coming up? Scout your rival, and steer into the lines where they struggle."
+ },
+ {
+  "id": "n9",
+  "start": 36.1,
+  "dur": 4.73,
+  "speed": 1.19,
+  "text": "And learn from the legends. Carlsen. Kasparov. Fischer. Morphy."
+ },
+ {
+  "id": "n10",
+  "start": 41.0,
+  "dur": 2.09,
+  "speed": 1.0,
+  "text": "OpeningCoach. Make your move."
+ }
+]

@@ -1,0 +1,58 @@
+### Unknown analysis id -> 404
+$ curl -s -w '
+HTTP %{http_code}' localhost:8080/api/analyses/does-not-exist
+{"type":"about:blank","title":"Not found","status":404,"detail":"Analysis does-not-exist not found (it may have expired; import the games again)","instance":"/api/analyses/does-not-exist"}
+HTTP 404
+
+### Invalid colour -> 400
+$ curl -s -w '
+HTTP %{http_code}' -X POST localhost:8080/api/analyses -H 'Content-Type: application/json' -d '{"source":"demo","username":"demo_player","colour":"purple"}'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"colour must be white or black","instance":"/api/analyses"}
+HTTP 400
+
+### Illegal move path -> 400
+$ curl -s -w '
+HTTP %{http_code}' 'localhost:8080/api/board?moves=e4,e5,Ke3,Qh4,Kd5'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"Illegal move at ply 3: No legal piece can make this move: 'Ke3'","instance":"/api/board"}
+HTTP 400
+
+### Empty PGN upload -> 400
+$ curl -s -w '
+HTTP %{http_code}' -X POST localhost:8080/api/analyses/pair -H 'Content-Type: application/json' -d '{"source":"pgn","username":"me","pgnText":""}'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"Upload a PGN file (pgnText is empty)","instance":"/api/analyses/pair"}
+HTTP 400
+
+### PGN with no games for that player -> 4xx
+$ curl -s -w '
+HTTP %{http_code}' -X POST localhost:8080/api/analyses/pair -H 'Content-Type: application/json' -d '{"source":"pgn","username":"nobody","pgnText":"[White \"a\"]
+[Black \"b\"]
+[Result \"1-0\"]
+
+1. e4 e5 1-0"}'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"None of the 1 games could be used. Check that 'nobody' is the name used in the games.","instance":"/api/analyses/pair"}
+HTTP 400
+
+### Unknown Lichess user -> 404
+$ curl -s -w '
+HTTP %{http_code}' -X POST localhost:8080/api/analyses/pair -H 'Content-Type: application/json' -d '{"source":"lichess","username":"zz-no-such-user-xq81","maxGames":10}'
+{"type":"about:blank","title":"Could not fetch games","status":404,"detail":"Lichess user 'zz-no-such-user-xq81' not found","instance":"/api/analyses/pair"}
+HTTP 404
+
+### Negative study budget -> 400
+$ curl -s -w '
+HTTP %{http_code}' -X POST localhost:8080/api/analyses/cd75bf40-6197-4ea5-8e5e-b0332ab33284/study-plan -H 'Content-Type: application/json' -d '{"budgetMinutes":-5}'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"budgetMinutes must be greater than or equal to 0","instance":"/api/analyses/cd75bf40-6197-4ea5-8e5e-b0332ab33284/study-plan"}
+HTTP 400
+
+### Matchup with same colours -> 400
+$ curl -s -w '
+HTTP %{http_code}' 'localhost:8080/api/analyses/cd75bf40-6197-4ea5-8e5e-b0332ab33284/matchup/cd75bf40-6197-4ea5-8e5e-b0332ab33284'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"Pick opposite colours: analyse your White games against the opponent's Black games","instance":"/api/analyses/cd75bf40-6197-4ea5-8e5e-b0332ab33284/matchup/cd75bf40-6197-4ea5-8e5e-b0332ab33284"}
+HTTP 400
+
+### Weak lines with k=0 -> 400
+$ curl -s -w '
+HTTP %{http_code}' 'localhost:8080/api/analyses/cd75bf40-6197-4ea5-8e5e-b0332ab33284/weak-lines?k=0'
+{"type":"about:blank","title":"Invalid input","status":400,"detail":"must be greater than or equal to 1","instance":"/api/analyses/cd75bf40-6197-4ea5-8e5e-b0332ab33284/weak-lines"}
+HTTP 400
+
