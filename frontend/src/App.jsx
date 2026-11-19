@@ -178,7 +178,15 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="screen" key={`${tab}-${analysis.id}`}>
+          <div className="screen" key={tab === 'opponent' || tab === 'greats' || tab === 'how' ? tab : `${tab}-${analysis.id}`}>
+            {analysis.summary.games === 0 && !['greats', 'how'].includes(tab) ? (
+              <div className="empty-side">
+                <img src={`/pieces/${side === 'white' ? 'w' : 'b'}K.svg`} alt="" />
+                <h2>No games as {side === 'white' ? 'White' : 'Black'}</h2>
+                <p>This import has {pair[other(side)].summary.games} games as {other(side) === 'white' ? 'White' : 'Black'} and none as {side === 'white' ? 'White' : 'Black'}.</p>
+                <button className="pill-btn" onClick={() => switchSide(other(side))}>Show my {other(side) === 'white' ? 'White' : 'Black'} games</button>
+              </div>
+            ) : <>
             {tab === 'board' && <Explorer analysis={analysis} path={path} setPath={setPath} onTiming={onTiming} />}
             {tab === 'weak' && <WeakLines analysis={analysis} openOnBoard={openOnBoard} onTiming={onTiming} />}
             {tab === 'book' && <OutOfBook analysis={analysis} openOnBoard={openOnBoard} onTiming={onTiming} />}
@@ -186,6 +194,7 @@ export default function App() {
             {tab === 'opponent' && <Scout analysis={analysis} opponent={opponent} oppPair={oppPair} loadOpponent={loadOpponent} onTiming={onTiming} />}
             {tab === 'greats' && <Greats onTiming={onTiming} />}
             {tab === 'how' && <UnderTheHood timings={timings} />}
+            </>}
           </div>
         </main>
       )}

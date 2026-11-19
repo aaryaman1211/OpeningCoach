@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpeningCoach video ad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #1c1b19; color: #f1efe8; font-family: 'Titillium Web', system-ui, sans-serif; }
+  .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; box-sizing: border-box; }
+  canvas { width: min(100%, calc((100vh - 90px) * 16 / 9)); aspect-ratio: 16 / 9; background: #fbf8f2; border-radius: 10px; }
+  .bar { display: flex; gap: 10px; align-items: center; width: min(100%, calc((100vh - 90px) * 16 / 9)); }
+  button { font: 700 14px 'Titillium Web', sans-serif; border: 1px solid #4a4945; background: #2b2a27; color: #f1efe8; border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+  input[type=range] { flex: 1; accent-color: #d85a30; }
+  .t { font-variant-numeric: tabular-nums; min-width: 70px; text-align: right; color: #b4b2a9; }
+  body.recording .bar { display: none; }
+  body.recording .wrap { padding: 0; }
+  body.recording canvas { width: 1920px; border-radius: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="c" width="1920" height="1080" aria-label="OpeningCoach video ad"></canvas>
+  <div class="bar">
+    <button id="play">Pause</button>
+    <button id="restart">Restart</button>
+    <input id="seek" type="range" min="0" max="45" step="0.01" value="0" aria-label="Seek">
+    <span class="t" id="time">0.0 s</span>
+  </div>
+</div>
+<script>
+// ------------------------------------------------------------------ setup
+const C = document.getElementById('c'), X = C.getContext('2d')
+const W = 1920, H = 1080, T = 45
+const COL = { bg: '#FBF8F2', disc: '#F1E9DA', ground: '#E6DCC9', ink: '#2C2C2A', muted: '#6B6963', acc: '#D85A30', accDark: '#993C1D',
+  soft: '#F8E6DD', line: '#E2DDD2', card: '#FFFFFF', good: '#3B7A4F', bad: '#B2463B', blue: '#2F5F9E', dark: '#1C1B19' }
+const FONT = (w, s) => `${w} ${s}px "Titillium Web", system-ui, sans-serif`
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x))
+const prog = (t, a, b) => clamp((t - a) / (b - a))
+const out = (x) => 1 - Math.pow(1 - x, 3)
+const inOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+const back = (x) => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2) }
+const lerp = (a, b, k) => a + (b - a) * k
+
+const PIECES = {}
+for (const c of ['w', 'b']) for (const p of 'KQRBNP') {
+  const img = new Image(); img.src = `/pieces/${c}${p}.svg`; PIECES[c + p] = img
+}
+
+function rr(x, y, w, h, r, fill, stroke, lw = 2) {
+  X.beginPath(); X.roundRect(x, y, w, h, r)
+  if (fill) { X.fillStyle = fill; X.fill() }
+  if (stroke) { X.strokeStyle = stroke; X.lineWidth = lw; X.stroke() }
+}
+function text(s, x, y, font, color, align = 'left') { X.font = font; X.fillStyle = color; X.textAlign = align; X.textBaseline = 'alphabetic'; X.fillText(s, x, y) }
+function width(s, font) { X.font = font; return X.measureText(s).width }
+function circle(x, y, r, fill) { X.beginPath(); X.arc(x, y, r, 0, Math.PI * 2); X.fillStyle = fill; X.fill() }
+function poly(pts, fill, stroke, lw = 1.2) {
+  X.beginPath(); pts.forEach(([a, b], i) => (i ? X.lineTo(a, b) : X.moveTo(a, b))); X.closePath()
+  if (fill) { X.fillStyle = fill; X.fill() }
+  if (stroke) { X.strokeStyle = stroke; X.lineWidth = lw; X.stroke() }
+}
+function ell(x, y, rx, ry, fill, stroke) {
+  X.beginPath(); X.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2)
+  if (fill) { X.fillStyle = fill; X.fill() }
+  if (stroke) { X.strokeStyle = stroke; X.lineWidth = 1.2; X.stroke() }
+}
+// big two-tone headline; second line in orange
+function headline(lines, x, y, size, alpha, slide = 0) {
+  X.save(); X.globalAlpha = alpha
+  lines.forEach((ln, i) => {
+    const [s, col] = Array.isArray(ln) ? ln : [ln, COL.ink]
+    text(s, x, y + i * size * 0.98 + slide, FONT(900, size), col)
+  })
+  X.restore()
+}
+function chip(s, x, y, alpha = 1, bg = COL.soft, fg = COL.accDark) {
+  X.save(); X.globalAlpha = alpha
+  const f = FONT(700, 26), w = width(s, f) + 40
+  rr(x, y, w, 46, 23, bg); text(s, x + 20, y + 32, f, fg); X.restore(); return w
+}
+
+// ------------------------------------------------------------------ isometric board (flat-shaded 3D)
+const ISO = { w: 66, h: 33 }
+const PC = { w: { l: '#FBF9F4', r: '#D9D3C5', t: '#FFFFFF', s: '#8A8475' }, b: { l: '#4E4C47', r: '#2F2E2B', t: '#6A6863', s: '#141413' } }
+const PROF = { p: [[15, 0], [15, 4], [10, 7], [7, 20], [10, 23], [6, 25]], r: [[16, 0], [16, 5], [11, 8], [10, 32], [14, 35], [14, 44]],
+  b: [[16, 0], [16, 5], [10, 8], [7, 30], [11, 32], [6, 34]], q: [[17, 0], [17, 5], [11, 8], [7, 36], [13, 41], [13, 45]],
+  k: [[17, 0], [17, 5], [11, 8], [7, 38], [13, 42], [11, 48]], n: [[16, 0], [16, 5], [11, 8], [11, 14]] }
+function isoPiece(t, side, x, y, k) {
+  const c = PC[side]
+  const prof = PROF[t].map(([r, h]) => [r * k, h * k])
+  const top = prof[prof.length - 1], ty = y - top[1]
+  ell(x, y, prof[0][0], prof[0][0] * 0.45, c.r, c.s)
+  poly([...prof.map(([r, h]) => [x - r, y - h]), [x, ty], [x, y]], c.l, c.s)
+  poly([[x, y], [x, ty], ...prof.slice().reverse().map(([r, h]) => [x + r, y - h])], c.r, c.s)
+  ell(x, ty, top[0], top[0] * 0.45, c.t, c.s)
+  if (t === 'p') { ell(x, ty - 7 * k, 8.5 * k, 8.5 * k, c.l, c.s) }
+  if (t === 'r') for (const o of [-9, 0, 9]) { X.fillStyle = o > 0 ? c.r : c.l; X.fillRect(x + o * k - 3 * k, ty - 7 * k, 6 * k, 7 * k); X.strokeStyle = c.s; X.strokeRect(x + o * k - 3 * k, ty - 7 * k, 6 * k, 7 * k) }
+  if (t === 'b') { ell(x, ty - 10 * k, 8 * k, 12 * k, c.l, c.s); circle(x, ty - 24 * k, 3 * k, c.t) }
+  if (t === 'q') { poly([[x - 13 * k, ty], [x - 15 * k, ty - 14 * k], [x - 7 * k, ty - 6 * k], [x, ty - 17 * k], [x + 7 * k, ty - 6 * k], [x + 15 * k, ty - 14 * k], [x + 13 * k, ty]], c.l, c.s); for (const o of [-15, 0, 15]) circle(x + o * k, ty - (o ? 16 : 20) * k, 2.6 * k, c.t) }
+  if (t === 'k') { X.fillStyle = c.l; X.strokeStyle = c.s; X.fillRect(x - 2.5 * k, ty - 20 * k, 5 * k, 20 * k); X.strokeRect(x - 2.5 * k, ty - 20 * k, 5 * k, 20 * k); X.fillRect(x - 8 * k, ty - 15 * k, 16 * k, 5 * k); X.strokeRect(x - 8 * k, ty - 15 * k, 16 * k, 5 * k) }
+  if (t === 'n') {
+    const d = side === 'w' ? -1 : 1
+    poly([[x - 11 * k, ty], [x - 12 * k, ty - 14 * k], [x + d * 12 * k, ty - 30 * k], [x + d * 4 * k, ty - 42 * k], [x - d * 2 * k, ty - 40 * k], [x - d * 14 * k, ty - 30 * k], [x - d * 12 * k, ty - 24 * k], [x - d * 2 * k, ty - 26 * k], [x - d * 9 * k, ty - 12 * k], [x + 11 * k, ty]], c.l, c.s)
+    poly([[x, ty], [x + d * 12 * k, ty - 30 * k], [x + d * 4 * k, ty - 42 * k], [x + d * k, ty - 30 * k], [x + 11 * d * k, ty]], c.r, c.s)
+  }
+}
+function startPieces() {
+  const backRank = 'rnbqkbnr', a = []
+  for (let i = 0; i < 8; i++) a.push({ t: backRank[i], c: 'b', i, j: 0 }, { t: 'p', c: 'b', i, j: 1 }, { t: 'p', c: 'w', i, j: 6 }, { t: backRank[i], c: 'w', i, j: 7 })
+  return a
+}
+// moves applied up to time t: [fromI, fromJ, toI, toJ, startTime]
+function isoBoard(cx, top, scale, t, opts = {}) {
+  const w = ISO.w * scale, h = ISO.h * scale, k = 1.08 * scale
+  const P = (i, j) => [cx + ((i - j) * w) / 2, top + ((i + j) * h) / 2]
+  const pieces = startPieces().map((p, idx) => ({ ...p, idx }))
+  let last = null, anim = null
+  for (const m of opts.moves || []) {
+    const [fi, fj, ti, tj, at] = m
+    const p = pieces.find((q) => q.i === fi && q.j === fj)
+    if (!p || t < at) continue
+    const kk = clamp((t - at) / 0.6)
+    if (kk < 1) { anim = { p, fi, fj, ti, tj, k: inOut(kk) } }
+    else { const cap = pieces.findIndex((q) => q.i === ti && q.j === tj && q !== p); if (cap >= 0) pieces.splice(cap, 1); p.i = ti; p.j = tj; last = { fi, fj, ti, tj } }
+  }
+  const g = P(4, 4)
+  ell(g[0], g[1] + 40 * scale, 300 * scale, 130 * scale, COL.ground)
+  const off = 14 * scale / (w / 2), FT = 16 * scale
+  const A = P(-off, -off), B = P(8 + off, -off), Cc = P(8 + off, 8 + off), D = P(-off, 8 + off)
+  poly([D, Cc, [Cc[0], Cc[1] + FT], [D[0], D[1] + FT]], '#7A5A3E')
+  poly([B, Cc, [Cc[0], Cc[1] + FT], [B[0], B[1] + FT]], '#5E4530')
+  poly([A, B, Cc, D], '#93704F', '#A9855F')
+  const on = (o, i, j) => o && ((i === o.fi && j === o.fj) || (i === o.ti && j === o.tj))
+  for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+    const light = (i + j) % 2 === 0, hl = on(anim, i, j) || (!anim && on(last, i, j))
+    poly([P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)], hl ? (light ? '#F3D2B4' : '#DFA37A') : light ? '#F2E8D5' : '#C29A72')
+  }
+  const list = pieces.map((p) => {
+    let i = p.i, j = p.j, lift = 0
+    if (anim && p === anim.p) { i = lerp(anim.fi, anim.ti, anim.k); j = lerp(anim.fj, anim.tj, anim.k); lift = Math.sin(anim.k * Math.PI) * 28 * scale }
+    let drop = 0, a = 1
+    if (opts.dropIn != null) { const d = prog(t, opts.dropIn + (7 - p.j) * 0.06 + p.i * 0.025, opts.dropIn + (7 - p.j) * 0.06 + p.i * 0.025 + 0.5); drop = (1 - out(d)) * 160 * scale; a = d }
+    return { p, i, j, lift: lift + drop, a }
+  }).sort((u, v) => u.i + u.j - (v.i + v.j))
+  for (const o of list) {
+    const [x, y] = P(o.i + 0.5, o.j + 0.5)
+    X.save(); X.globalAlpha *= o.a
+    ell(x, y + 1 * scale, 15 * scale, 6 * scale, 'rgba(0,0,0,0.09)')
+    isoPiece(o.p.t, o.p.c, x, y - o.lift, k)
+    X.restore()
+  }
+}
+
+// ------------------------------------------------------------------ flat board with real piece art
+function flatBoard(x, y, size, fen, opts = {}) {
+  const sq = size / 8
+  rr(x - 14, y - 14, size + 28, size + 36, 16, '#93704F')
+  rr(x - 14, y + size + 6, size + 28, 16, 8, '#7A5A3E')
+  const rows = fen.split('/')
+  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+    const name = 'abcdefgh'[f] + (8 - r)
+    const light = (r + f) % 2 === 0
+    const hl = (opts.highlight || []).includes(name)
+    X.fillStyle = hl ? (light ? '#F3D2B4' : '#DFA37A') : light ? '#F2E8D5' : '#C29A72'
+    X.fillRect(x + f * sq, y + r * sq, sq, sq)
+  }
+  rows.forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) { f += +ch; continue } const key = (ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase(); const img = PIECES[key]; if (img.complete) X.drawImage(img, x + f * sq + sq * 0.05, y + r * sq + sq * 0.05, sq * 0.9, sq * 0.9); f++ } })
+  for (const a of opts.arrows || []) {
+    const c = (s) => [x + ('abcdefgh'.indexOf(s[0]) + 0.5) * sq, y + (8 - +s[1] + 0.5) * sq]
+    const [x1, y1] = c(a.from), [x2f, y2f] = c(a.to), k = a.k ?? 1
+    if (k <= 0) continue
+    const x2 = lerp(x1, x2f, k), y2 = lerp(y1, y2f, k)
+    const ang = Math.atan2(y2 - y1, x2 - x1), hl = sq * 0.38
+    X.save(); X.globalAlpha = 0.85; X.strokeStyle = a.color; X.lineCap = 'round'; X.lineWidth = sq * 0.16
+    X.beginPath(); X.moveTo(x1, y1); X.lineTo(x2 - Math.cos(ang) * hl * 0.8, y2 - Math.sin(ang) * hl * 0.8); X.stroke()
+    poly([[x2, y2], [x2 - Math.cos(ang - 0.5) * hl, y2 - Math.sin(ang - 0.5) * hl], [x2 - Math.cos(ang + 0.5) * hl, y2 - Math.sin(ang + 0.5) * hl]], a.color)
+    X.restore()
+  }
+}
+
+function bar(x, y, w, h, frac, color, bg = '#F1ECE2') { rr(x, y, w, h, h / 2, bg); if (frac > 0) rr(x, y, Math.max(h, w * frac), h, h / 2, color) }
+
+// ------------------------------------------------------------------ scenes
+function vis(t, a, b, fade = 0.45) { return Math.min(prog(t, a, a + fade), 1 - prog(t, b - fade, b)) }
+
+function sceneIntro(t) { // 0 - 9.5
+  const a = vis(t, 0, 9.6, 0.4)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  circle(1300, 480, 500 + 6 * Math.sin(t * 0.8), COL.disc)
+  isoBoard(1300, 205, 1.8, t, { dropIn: 0.2, moves: [[4, 6, 4, 4, 5.0], [2, 1, 2, 3, 6.0], [6, 7, 5, 5, 7.0]] })
+  const a1 = Math.min(prog(t, 0.5, 1.1), 1 - prog(t, 4.2, 4.6))
+  headline(['Every game', 'starts the', ['same way.', COL.acc]], 120, 330, 116, a1, (1 - out(prog(t, 0.5, 1.2))) * 40)
+  const a2 = prog(t, 4.7, 5.3)
+  headline(['So why do you', 'keep losing', ['by move ten?', COL.acc]], 120, 330, 108, a2, (1 - out(a2)) * 40)
+  const a3 = prog(t, 7.6, 8.1)
+  X.save(); X.globalAlpha = a3
+  rr(120, 690, 640, 128, 22, COL.card, COL.line)
+  text('You in the Sicilian', 150, 740, FONT(700, 30), COL.muted)
+  text('38%', 150, 795, FONT(900, 52), COL.bad)
+  text('strong players score 48% here', 150 + width('38%', FONT(900, 52)) + 24, 793, FONT(600, 30), COL.muted)
+  X.restore()
+  X.restore()
+}
+
+function sceneLogo(t) { // 9.5 - 13.8
+  const a = vis(t, 9.5, 13.9, 0.4)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  X.fillStyle = COL.dark; X.fillRect(0, 0, W, H)
+  const s = back(prog(t, 9.6, 10.4))
+  X.save(); X.translate(W / 2, 470); X.scale(s, s)
+  const lf = FONT(900, 140), lw = width('OpeningCoach', lf), start = -(150 + lw) / 2
+  const img = PIECES.wN; if (img.complete) X.drawImage(img, start, -95, 130, 130)
+  text('Opening', start + 150, 15, lf, '#F1EFE8')
+  text('Coach', start + 150 + width('Opening', lf), 15, lf, COL.acc)
+  X.restore()
+  const tg = prog(t, 10.6, 11.2)
+  X.save(); X.globalAlpha = a * tg
+  text('Don’t let your opening checkmate you.', W / 2, 640 + (1 - out(tg)) * 30, FONT(600, 52), '#B4B2A9', 'center')
+  X.restore()
+  X.restore()
+}
+
+function featureTitle(n, title, accent, t, start) {
+  const k = out(prog(t, start, start + 0.6))
+  chip(`${n} of 5`, 120, 110, k)
+  X.save(); X.globalAlpha = k
+  const f = FONT(900, 92), w1 = width(title + ' ', f)
+  text(title + ' ', 120, 250 + (1 - k) * 30, f, COL.ink)
+  text(accent, 120 + w1, 250 + (1 - k) * 30, f, COL.acc)
+  X.restore()
+}
+
+function sceneTree(t) { // 13.8 - 19.5
+  const a = vis(t, 13.8, 19.6)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  featureTitle(1, 'Your opening', 'tree.', t, 13.9)
+  circle(520, 690, 330, COL.disc)
+  const k = prog(t, 14.6, 15.6)
+  flatBoard(250, 400, 540, 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR', {
+    highlight: ['e7', 'e5'],
+    arrows: [{ from: 'f2', to: 'f4', color: COL.good, k: out(prog(t, 15.2, 15.9)) }, { from: 'd2', to: 'd4', color: COL.good, k: out(prog(t, 15.4, 16.1)) }, { from: 'g1', to: 'f3', color: COL.blue, k: out(prog(t, 15.8, 16.6)) }],
+  })
+  const cards = [['You reached this position', `${Math.round(235 * out(prog(t, 15, 16.4)))} games`, 'you scored 56%'],
+    ['Players rated 1700+', `${Math.round(3407 * out(prog(t, 15.3, 16.8))).toLocaleString()} games`, 'your side scored 54%'],
+    ['Most played by you', 'Nf3 · 121 games', 'strong players: 64% of games']]
+  cards.forEach(([l, big, sub], i) => {
+    const ck = out(prog(t, 15 + i * 0.35, 15.6 + i * 0.35))
+    X.save(); X.globalAlpha = ck
+    const y = 340 + i * 205 + (1 - ck) * 30
+    rr(1000, y, 760, 180, 24, COL.card, COL.line)
+    text(l, 1040, y + 48, FONT(600, 30), COL.muted)
+    text(big, 1040, y + 112, FONT(900, 58), COL.ink)
+    text(sub, 1040, y + 154, FONT(600, 28), COL.muted)
+    X.restore()
+  })
+  void k
+  X.restore()
+}
+
+function sceneWeak(t) { // 19.5 - 25
+  const a = vis(t, 19.5, 25.1)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  featureTitle(2, 'Where you keep getting', 'forked.', t, 19.6)
+  const rows = [['1.e4 c5', 58, 0.38, 0.48, 5.6], ['1.e4 e5 2.Nf3 Nc6', 72, 0.5, 0.56, 4.0], ['1.e4 e5 2.f4 exf4', 11, 0.18, 0.51, 3.6],
+    ['1.e4 e5 2.f4 exf4 3.Nf3', 7, 0.14, 0.52, 2.6], ['1.e4 e5 2.Nf3 Nc6 3.Bc4 h6', 10, 0.4, 0.65, 2.5]]
+  rr(120, 320, 1680, 80, 20, '#F1ECE2')
+  ;['Line', 'Games', 'Your score', 'Strong players', 'Points lost'].forEach((h, i) => text(h, [160, 900, 1060, 1400, 1760][i], 372, FONT(700, 28), COL.muted, i === 4 ? 'right' : 'left'))
+  rows.forEach(([line, g, you, ref, lost], i) => {
+    const rk = out(prog(t, 20.2 + i * 0.25, 20.8 + i * 0.25))
+    X.save(); X.globalAlpha = rk
+    const y = 410 + i * 112
+    rr(120, y, 1680, 100, 20, i === 0 ? COL.soft : COL.card, i === 0 ? '#F0C4AE' : COL.line)
+    text(line, 160, y + 64, `600 34px ui-monospace, Menlo, monospace`, i === 0 ? COL.accDark : COL.ink)
+    text(String(g), 900, y + 64, FONT(700, 34), COL.ink)
+    const bk = out(prog(t, 20.6 + i * 0.25, 21.6 + i * 0.25))
+    bar(1060, y + 40, 220, 18, you * bk, you < ref - 0.05 ? COL.bad : COL.muted)
+    text(`${Math.round(you * 100 * bk)}%`, 1300, y + 62, FONT(700, 32), you < ref - 0.05 ? COL.bad : COL.ink)
+    bar(1400, y + 40, 160, 18, ref * bk, '#B4B2A9')
+    text(`${Math.round(ref * 100)}%`, 1580, y + 62, FONT(700, 32), COL.muted)
+    text(`−${lost.toFixed(1)}`, 1760, y + 64, FONT(900, 40), COL.bad, 'right')
+    X.restore()
+  })
+  X.restore()
+}
+
+function scenePlan(t) { // 25 - 30.5
+  const a = vis(t, 25, 30.6)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  featureTitle(3, 'Practice makes', 'pawn-fect.', t, 25.1)
+  const mins = Math.round(lerp(15, 60, inOut(prog(t, 25.9, 27.4))))
+  text('Study time', 120, 380, FONT(700, 32), COL.muted)
+  text(`${mins} minutes`, 300, 380, FONT(900, 40), COL.ink)
+  const sx = 120, sw = 1680, frac = (mins - 10) / 290
+  bar(sx, 410, sw, 16, frac, COL.acc)
+  circle(sx + sw * frac, 418, 22, COL.acc); circle(sx + sw * frac, 418, 12, '#FFFFFF')
+  const cov = 0.54 * out(prog(t, 27.2, 28.4))
+  text('Fixes', 120, 520, FONT(700, 32), COL.muted)
+  text(`${Math.round(cov * 100)}%`, 220, 525, FONT(900, 64), COL.acc)
+  text('of the points you lose in your 15 weakest lines', 380, 520, FONT(600, 32), COL.muted)
+  bar(120, 550, 1680, 22, cov, COL.acc)
+  const lines = ['1.e4 c5 2.Bc4 Nc6 3.Nc3 e6 4.Nf3 Nf6 5.d3 d5', '1.e4 e5 2.f4 exf4 3.Nf3 g5 4.Bc4 Bg7 5.O-O h6', '1.e4 e5 2.Nf3 Nc6 3.Bc4 Nf6 4.d3 Be7 5.Nc3 O-O']
+  lines.forEach((l, i) => {
+    const k = out(prog(t, 27.6 + i * 0.3, 28.2 + i * 0.3))
+    X.save(); X.globalAlpha = k
+    const y = 630 + i * 120 + (1 - k) * 20
+    rr(120, y, 1680, 100, 20, COL.card, COL.line)
+    text(`Line ${i + 1}`, 160, y + 62, FONT(900, 34), COL.acc)
+    text(l, 320, y + 62, `600 32px ui-monospace, Menlo, monospace`, COL.ink)
+    text('20 min', 1760, y + 62, FONT(700, 32), COL.muted, 'right')
+    X.restore()
+  })
+  X.restore()
+}
+
+function sceneRival(t) { // 30.5 - 35.8
+  const a = vis(t, 30.5, 35.9)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  featureTitle(4, 'Know your', 'rival.', t, 30.6)
+  const k = back(prog(t, 31.0, 31.7))
+  X.save(); X.translate(560, 520); X.scale(k, k)
+  circle(-170, 0, 90, COL.blue); text('You', -170, 16, FONT(900, 44), '#FFFFFF', 'center')
+  text('vs', 0, 20, FONT(900, 60), COL.muted, 'center')
+  circle(170, 0, 90, COL.acc); text('Rival', 170, 16, FONT(900, 44), '#FFFFFF', 'center')
+  X.restore()
+  const items = [['Aim for this', '1.e4 e5 2.Bc4 Nf6 3.d3', 'You 83%', 'Them 17%', COL.good],
+    ['And this', '1.e4 d5 2.exd5 Qxd5 3.Nc3', 'You 72%', 'Them 37%', COL.good]]
+  items.forEach(([lab, line, you, them, col], i) => {
+    const ck = out(prog(t, 31.8 + i * 0.5, 32.5 + i * 0.5))
+    X.save(); X.globalAlpha = ck
+    const y = 360 + i * 250 + (1 - ck) * 30
+    rr(980, y, 820, 210, 26, COL.card, COL.line)
+    rr(980, y, 14, 210, 7, col)
+    text(lab, 1030, y + 58, FONT(900, 34), col)
+    text(line, 1030, y + 116, `600 34px ui-monospace, Menlo, monospace`, COL.ink)
+    text(you, 1030, y + 172, FONT(700, 32), COL.ink)
+    text(them, 1230, y + 172, FONT(700, 32), COL.muted)
+    X.restore()
+  })
+  const nk = prog(t, 33.4, 34)
+  X.save(); X.globalAlpha = nk
+  text('Your White games vs their Black games, and the other way round.', 120, 920, FONT(600, 32), COL.muted)
+  X.restore()
+  X.restore()
+}
+
+function sceneGreats(t) { // 35.8 - 40.6
+  const a = vis(t, 35.8, 40.7)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  featureTitle(5, 'Learn from the', 'legends.', t, 35.9)
+  const g = [['MC', 'Magnus Carlsen', '2004', '18.Ng6!'], ['GK', 'Garry Kasparov', '1999', '24.Rxd4!!'], ['BF', 'Bobby Fischer', '1956', '17…Be6!!'],
+    ['PM', 'Paul Morphy', '1858', '16.Qb8+!!'], ['AA', 'Adolf Anderssen', '1851', '22.Qf6+!!'], ['RR', 'Richard Réti', '1910', '9.Qd8+!!']]
+  g.forEach(([ini, name, year, key], i) => {
+    const ck = back(prog(t, 36.4 + i * 0.18, 37.0 + i * 0.18))
+    const col = i % 3, row = Math.floor(i / 3)
+    const x = 120 + col * 570, y = 330 + row * 300
+    X.save(); X.translate(x + 270, y + 130); X.scale(ck, ck); X.translate(-(x + 270), -(y + 130))
+    rr(x, y, 540, 260, 28, i === 3 ? COL.soft : COL.card, i === 3 ? COL.acc : COL.line, i === 3 ? 4 : 2)
+    circle(x + 70, y + 72, 42, COL.acc); text(ini, x + 70, y + 86, FONT(900, 34), '#FFFFFF', 'center')
+    text(name, x + 130, y + 86, FONT(900, 40), COL.ink)
+    text(year, x + 40, y + 170, FONT(700, 30), COL.muted)
+    text('Key moment', x + 40, y + 222, FONT(700, 26), COL.accDark)
+    text(key, x + 200, y + 224, `700 34px ui-monospace, Menlo, monospace`, COL.ink)
+    X.restore()
+  })
+  X.restore()
+}
+
+function sceneEnd(t) { // 40.6 - 45
+  const a = prog(t, 40.6, 41.1)
+  if (a <= 0) return
+  X.save(); X.globalAlpha = a
+  circle(1380, 540, 470, COL.disc)
+  isoBoard(1380, 255, 1.55, t, { moves: [[4, 6, 4, 4, 41.4], [4, 1, 4, 3, 42.2]] })
+  const k = out(prog(t, 40.8, 41.5))
+  const img = PIECES.bN; if (img.complete) X.drawImage(img, 120, 140, 76, 76)
+  text('Opening', 210, 202, FONT(900, 64), COL.ink); text('Coach', 210 + width('Opening', FONT(900, 64)), 202, FONT(900, 64), COL.acc)
+  headline(['Make your', ['move.', COL.acc]], 120, 430, 150, k, (1 - k) * 30)
+  const ck = out(prog(t, 41.6, 42.3))
+  X.save(); X.globalAlpha = ck
+  rr(120, 640, 640, 96, 48, COL.acc)
+  text('Analyse my games  →', 440, 703, FONT(900, 40), '#FFFFFF', 'center')
+  text('Free · Lichess and Chess.com · White and Black together', 120, 800, FONT(600, 32), COL.muted)
+  text('[YOUR LINK]', 120, 860, FONT(700, 34), COL.accDark)
+  X.restore()
+  X.restore()
+}
+
+function render(t) {
+  X.setTransform(1, 0, 0, 1, 0, 0)
+  X.globalAlpha = 1
+  X.fillStyle = COL.bg; X.fillRect(0, 0, W, H)
+  sceneIntro(t); sceneTree(t); sceneWeak(t); scenePlan(t); sceneRival(t); sceneGreats(t); sceneEnd(t); sceneLogo(t)
+  // progress line
+  X.globalAlpha = 1
+  X.fillStyle = 'rgba(216, 90, 48, 0.85)'; X.fillRect(0, H - 6, (W * t) / T, 6)
+}
+
+// ------------------------------------------------------------------ playback
+let playing = true, t0 = performance.now(), offset = 0
+const seek = document.getElementById('seek'), time = document.getElementById('time'), playBtn = document.getElementById('play')
+function now() { return playing ? offset + (performance.now() - t0) / 1000 : offset }
+function frame() {
+  let t = now()
+  if (t >= T) { if (window.__recording) { t = T } else { offset = 0; t0 = performance.now(); t = 0 } }
+  render(t)
+  seek.value = t.toFixed(2); time.textContent = `${t.toFixed(1)} s`
+  requestAnimationFrame(frame)
+}
+playBtn.onclick = () => { if (playing) { offset = now(); playing = false; playBtn.textContent = 'Play' } else { t0 = performance.now(); playing = true; playBtn.textContent = 'Pause' } }
+document.getElementById('restart').onclick = () => { offset = 0; t0 = performance.now(); playing = true; playBtn.textContent = 'Pause' }
+seek.oninput = () => { offset = +seek.value; t0 = performance.now() }
+
+window.renderAt = (t) => render(t)
+// Records the whole ad in real time from the canvas; resolves with base64 video and its mime type.
+window.recordVideo = async () => {
+  await document.fonts.ready
+  await Promise.all(Object.values(PIECES).map((i) => (i.complete ? 0 : new Promise((r) => (i.onload = r)))))
+  document.body.classList.add('recording')
+  const types = ['video/mp4;codecs=avc1.640028', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+  const mime = types.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m))
+  const stream = C.captureStream(30)
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 })
+  const chunks = []
+  rec.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+  const done = new Promise((r) => (rec.onstop = r))
+  window.__recording = true
+  offset = 0; t0 = performance.now(); playing = true
+  rec.start(1000)
+  await new Promise((r) => setTimeout(r, T * 1000 + 600))
+  rec.stop(); await done
+  const blob = new Blob(chunks, { type: mime })
+  const buf = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
+  return { mime, base64: btoa(bin), bytes: buf.length }
+}
+
+document.fonts.ready.then(() => requestAnimationFrame(frame))
+</script>
+</body>
+</html>

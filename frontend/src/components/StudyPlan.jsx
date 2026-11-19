@@ -13,8 +13,12 @@ export default function StudyPlan({ analysis, openOnBoard, onTiming }) {
   const [error, setError] = useState('')
   const timer = useRef(null)
 
+  const mpp = Number(minutesPerPly)
+  const mppValid = minutesPerPly !== '' && mpp >= 0.5 && mpp <= 10
+
   useEffect(() => {
     clearTimeout(timer.current)
+    if (!mppValid) return undefined
     timer.current = setTimeout(() => {
       setError('')
       api.studyPlan(analysis.id, {
@@ -60,7 +64,9 @@ export default function StudyPlan({ analysis, openOnBoard, onTiming }) {
         )}
         <label className="field narrow">
           <span>Minutes per move</span>
-          <input type="number" min="0.5" max="10" step="0.5" value={minutesPerPly} onChange={(e) => setMinutesPerPly(e.target.value)} />
+          <input type="number" min="0.5" max="10" step="0.5" value={minutesPerPly} onChange={(e) => setMinutesPerPly(e.target.value)}
+                 aria-invalid={!mppValid} aria-describedby="mpp-hint" />
+          {!mppValid && <span id="mpp-hint" className="field-hint">Use 0.5 to 10</span>}
         </label>
       </div>
 

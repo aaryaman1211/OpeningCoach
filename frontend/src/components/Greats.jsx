@@ -104,7 +104,9 @@ export default function Greats({ onTiming }) {
   const g = GREATS.find((x) => x.id === selected)
   const L = live[selected]
 
+  const detailRef = useRef(null)
   function pick(id) {
+    if (window.innerWidth < 960) setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
     setSelected(id)
     setLiveGame(null)
     setExploring(null)
@@ -157,7 +159,7 @@ export default function Greats({ onTiming }) {
         ))}
       </div>
 
-      <section className="great-detail" key={selected}>
+      <section className="great-detail" key={selected} ref={detailRef}>
         <div className="great-board">
           {shown ? (
             <LineReplay

@@ -478,3 +478,21 @@ details.how summary { font-weight: 600; }
   .side-switch button .count { display: none; }
   .greats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ================================================================ QA fixes */
+.side-switch button img { background: #f1ebde; border-radius: 50%; padding: 1px; }
+.field-hint { color: var(--bad); font-size: 12px; font-weight: 600; }
+.field input[aria-invalid='true'] { border-color: var(--bad); }
+.empty-side { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 56px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+.empty-side img { width: 64px; height: 64px; background: #f1ebde; border-radius: 50%; padding: 6px; }
+.empty-side h2 { font-weight: 900; font-size: 28px; }
+.empty-side p { color: var(--muted); max-width: 46ch; }
+@media (max-width: 600px) {
+  .app:not(.is-start) .top { gap: 8px; }
+  .app:not(.is-start) .top .spacer, .app:not(.is-start) .top .player-chip { display: none; }
+  .app:not(.is-start) .top .logo { order: 0; }
+  .app:not(.is-start) .top .theme-toggle { order: 1; margin-left: auto; }
+  .app:not(.is-start) .top .side-switch { order: 2; flex: 1; justify-content: space-between; }
+  .app:not(.is-start) .top .side-switch button { flex: 1; justify-content: center; }
+  .app:not(.is-start) .top .pill-btn { order: 3; }
+}

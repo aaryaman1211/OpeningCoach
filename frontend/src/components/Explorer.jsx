@@ -42,7 +42,7 @@ export default function Explorer({ analysis, path, setPath, onTiming, who = 'you
 
   useEffect(() => {
     let live = true
-    const key = path.join(',')
+    const key = `${analysis.id}|${path.join(',')}`
     if (cache.current.has(key)) {
       setView(cache.current.get(key))
       return

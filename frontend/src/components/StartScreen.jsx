@@ -59,6 +59,7 @@ export default function StartScreen({ onImport, onScoutAfter }) {
   }
 
   function scout() {
+    setError('')
     setNote('First load your own games, then open the Opponent tab to scout your rival.')
     onScoutAfter()
     nameInput.current?.focus()

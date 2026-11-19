@@ -19,6 +19,7 @@ export default function Scout({ analysis, opponent, oppPair, loadOpponent, onTim
   const [view, setView] = useState('plan')
   const [path, setPath] = useState([])
   const [changing, setChanging] = useState(false)
+  useEffect(() => setPath([]), [opponent?.id])
   const yourColour = analysis.summary.colour
   const theirColour = yourColour === 'white' ? 'black' : 'white'
 
@@ -67,7 +68,7 @@ export default function Scout({ analysis, opponent, oppPair, loadOpponent, onTim
       {view === 'plan' && <GamePlan analysis={analysis} opponent={opponent} openOnBoard={openOnBoard} onTiming={onTiming} />}
       {view === 'openings' && <TheirOpenings opponent={opponent} openOnBoard={openOnBoard} />}
       {view === 'weak' && <WeakLines analysis={opponent} openOnBoard={openOnBoard} onTiming={onTiming} who="them" name={s.player} />}
-      {view === 'board' && <Explorer analysis={opponent} path={path} setPath={setPath} onTiming={onTiming} who="them" name={s.player} />}
+      {view === 'board' && <Explorer key={opponent.id} analysis={opponent} path={path} setPath={setPath} onTiming={onTiming} who="them" name={s.player} />}
     </div>
   )
 }
