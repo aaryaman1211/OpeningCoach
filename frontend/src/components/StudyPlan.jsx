@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, pct } from '../api.js'
+import LineReplay from './LineReplay.jsx'
 
 export default function StudyPlan({ analysis, openLine, onTiming }) {
   const [mode, setMode] = useState('budget')
@@ -8,6 +9,7 @@ export default function StudyPlan({ analysis, openLine, onTiming }) {
   const [extraPlies, setExtraPlies] = useState(6)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [watching, setWatching] = useState(null)
   const timer = useRef(null)
 
   useEffect(() => {
@@ -101,7 +103,17 @@ export default function StudyPlan({ analysis, openLine, onTiming }) {
                     </span>
                   ))}
                 </div>
-                <button onClick={() => openLine(l.moves)}>Walk through it</button>
+                <div className="btn-row">
+                  <button className={watching === l.id ? 'on' : ''} onClick={() => setWatching(watching === l.id ? null : l.id)}>
+                    {watching === l.id ? 'Hide' : '▶ Watch it'}
+                  </button>
+                  <button onClick={() => openLine(l.moves)}>Open on board</button>
+                </div>
+                {watching === l.id && (
+                  <div className="watch fade-in">
+                    <LineReplay moves={l.moves} orientation={analysis.summary.colour} interval={800} />
+                  </div>
+                )}
               </li>
             ))}
           </ol>

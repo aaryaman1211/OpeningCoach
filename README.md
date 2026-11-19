@@ -7,7 +7,11 @@ players rated 1700+. It then shows:
 - **Weak lines**: where you lose the most points compared with strong players from the same position.
 - **Leaving theory**: the move where your games leave known theory, and what strong players play there instead.
 - **Study plan**: which lines to study in the time you have ("Fit my time") or to fix everything ("Fix everything").
-- **Explorer**: a board and move table for any position, showing your results next to strong players'.
+- **Board**: an animated, interactive board. Drag or click pieces to play any legal move, see arrows for strong
+  players' choices and your favourite move, draw your own arrows with right-drag, step with the arrow keys, and
+  auto-play your main line. A gauge beside the board shows your score next to strong players'.
+- **Scout opponent**: load an opponent's games to see their repertoire, where they struggle, your best weapons and
+  danger zones against them, and an animated prediction of how your game will start.
 - **Under the hood**: Bloom filter parameters, live lookup counters and server timings.
 
 CIA 3 Advanced Algorithm project. All assessed algorithms are hand-written in Java in `core/` (no Spring imports there).
@@ -20,10 +24,11 @@ CIA 3 Advanced Algorithm project. All assessed algorithms are hand-written in Ja
 | Bloom filter | Unit 6, CO5 | `core/.../bloom/BloomFilter.java` | In-memory "did strong players ever reach this position?" check in front of the on-disk index; every "maybe" is confirmed by binary search | O(k) per query; m = −n ln p/(ln 2)², k = (m/n) ln 2 |
 | Randomized Quickselect | Unit 6, CO5 | `core/.../select/RandomizedSelect.java` | Picks the k weakest lines / most common theory exits | expected O(n), about 3.39n comparisons for the median |
 | Randomized QuickSort | Unit 6, CO5 | `core/.../select/RandomizedQuickSort.java` | Orders the k items shown | expected O(k log k) |
+| Trie intersection (opponent matchup) | Unit 4 | `core/.../analysis/Matchup.java` | Simultaneous DFS over your trie and the opponent's, visiting only shared lines | O(S) for S shared lines |
 | Set cover / budgeted max coverage | Unit 5 (approximation), Unit 6 (NP-hardness) | `core/.../cover/CoverageSolver.java` | Chooses study lines | greedy: H(d) ≤ 1 + ln d for cover; ≥ (1 − 1/e)/2 for budget. Brute force O(2^s·s) for s ≤ 22 checks the real ratio |
 
-Infrastructure (not assessed): `chess/Board.java` replays SAN moves legally and computes Zobrist position keys so
-transpositions are recognised. `pgn/` reads PGN. `reference/` builds and reads the sorted on-disk index.
+Infrastructure (not assessed): `chess/Board.java` replays SAN moves legally, generates legal moves (verified with
+standard perft counts), and computes Zobrist position keys so transpositions are recognised. `pgn/` reads PGN. `reference/` builds and reads the sorted on-disk index.
 
 Approximation results are labelled approximate in the API and UI; the study plan never claims to be optimal.
 
@@ -32,7 +37,8 @@ Approximation results are labelled approximate in the API and UI; the study plan
 Prerequisites: Java 21+, Maven 3.9+, Node 18+ (only to rebuild the frontend), curl and zstd (only to rebuild the data).
 
 ```bash
-# 1. build everything (runs the 61 tests)
+# 1. build the frontend into the server, then everything (runs the 73 tests)
+cd frontend && npm install && npm run build && cd ..
 mvn install
 
 # 2. start the server (first start builds data/index from data/reference in about 5 s)
@@ -53,6 +59,7 @@ npm run build                                   # writes into api/src/main/resou
 | File | Source | Licence |
 |---|---|---|
 | `data/reference/lichess-2013-01-1700plus.pgn` | Lichess open database, January 2013, both players rated ≥ 1700 (21,925 games) | CC0 |
+| `frontend/public/pieces/*.svg` | Chess pieces by Colin M.L. Burnett, via Wikimedia Commons | CC BY-SA 3.0 |
 | `data/samples/demo_player.pgn` | 900 club-level games (1200–1650) from the same month, one side relabelled `demo_player` | CC0 |
 
 Rebuild them with `scripts/fetch-reference.sh [month] [minElo]` and `scripts/make-demo-sample.sh`.
@@ -68,6 +75,9 @@ Note that the demo file mixes many real players' games under one name. It is a t
 | GET | `/api/analyses/{id}/weak-lines?k=10&minGames=3` | |
 | GET | `/api/analyses/{id}/out-of-book?k=10` | |
 | POST | `/api/analyses/{id}/study-plan` | `{"budgetMinutes":60,"minutesPerPly":2,"extraPlies":6,"weakLines":15,"minGames":3}` (`budgetMinutes: null` = fix everything) |
+| GET | `/api/analyses/{id}/top-lines?k=8&depth=6` | most-played lines at a depth |
+| GET | `/api/analyses/{id}/matchup/{opponentId}?minGames=2&k=6` | weapons, dangers, predicted game (opposite colours) |
+| GET | `/api/board?moves=e4,e5,Nf3` | replays a line: from/to squares and position for each ply |
 | GET | `/api/reference` | Bloom filter and index statistics |
 
 Errors are RFC 9457 `application/problem+json` with a readable `detail`. Examples:
@@ -83,10 +93,12 @@ curl -s -X POST localhost:8080/api/analyses -H 'Content-Type: application/json' 
 
 ## Tests
 
-`mvn test` runs 61 tests:
+`mvn test` runs 73 tests:
 
 | Class | Tests | Highlights |
 |---|---|---|
+| `LegalMovesTest` | 7 | perft from the start (8,902 at depth 3), Kiwipete, positions 3 and 4 (castling, en passant, pins, promotion), SAN disambiguation, mate/stalemate |
+| `MatchupTest` | 5 | best weapon and danger lines, only shared lines visited, predicted game, colour validation |
 | `BoardTest` | 12 | castling, en passant, promotion, pinned-piece disambiguation, illegal moves, transposition keys |
 | `PgnParserTest` | 6 | comments, nested variations, Chess960 rejected, illegal move reported with ply |
 | `OpeningTrieTest` | 7 | counts, maxPly boundary, bad input, 500 random prefixes checked against a brute-force scan |

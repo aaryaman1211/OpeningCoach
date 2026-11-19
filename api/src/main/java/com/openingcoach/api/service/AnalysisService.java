@@ -6,6 +6,7 @@ import com.openingcoach.api.dto.Dtos.CreateAnalysisRequest;
 import com.openingcoach.api.dto.Dtos.StudyPlanRequest;
 import com.openingcoach.api.dto.Dtos.Timed;
 import com.openingcoach.api.source.GameSourceClient;
+import com.openingcoach.core.analysis.Matchup;
 import com.openingcoach.core.analysis.OpeningAnalyzer;
 import com.openingcoach.core.analysis.Repertoire;
 import com.openingcoach.core.pgn.PgnGame;
@@ -153,6 +154,28 @@ public class AnalysisService {
         algo.put("approximate", true);
         algo.put("candidateLines", t.result().candidateLines());
         algo.put("bruteForceCompared", t.result().optimalValue() != null);
+        return new Timed<>(t.result(), t.millis(), algo);
+    }
+
+    public Timed<OpeningAnalyzer.TopLinesResult> topLines(String id, int k, int depth) {
+        OpeningAnalyzer a = get(id);
+        Timed<OpeningAnalyzer.TopLinesResult> t = timed(() -> a.topLines(k, depth), Map.of());
+        Map<String, Object> algo = new LinkedHashMap<>();
+        algo.put("name", "Trie walk + randomized Quickselect (top-k by games)");
+        algo.put("candidates", t.result().candidates());
+        algo.put("selectComparisons", t.result().selectComparisons());
+        return new Timed<>(t.result(), t.millis(), algo);
+    }
+
+    public Timed<Matchup.MatchupResult> matchup(String yourId, String theirId, int minGames, int k) {
+        OpeningAnalyzer you = get(yourId), them = get(theirId);
+        Timed<Matchup.MatchupResult> t = timed(() -> Matchup.compare(you.repertoire(), them.repertoire(), minGames, k,
+                20261119L), Map.of());
+        Map<String, Object> algo = new LinkedHashMap<>();
+        algo.put("name", "Simultaneous DFS over both tries (shared lines only) + randomized Quickselect");
+        algo.put("visitedNodes", t.result().visitedNodes());
+        algo.put("yourTrieNodes", you.repertoire().trie().nodeCount());
+        algo.put("theirTrieNodes", them.repertoire().trie().nodeCount());
         return new Timed<>(t.result(), t.millis(), algo);
     }
 

@@ -65,12 +65,17 @@ public final class OpeningAnalyzer {
     // ================================================================== explorer
 
     /** One candidate move in the explorer table. */
-    public record MoveRow(String san, int yourGames, Double yourScore, int refGames, Double refScore,
-                          Double refShare, boolean inBook) {
+    public record MoveRow(String san, String from, String to, int yourGames, Double yourScore, int refGames,
+                          Double refScore, Double refShare, boolean inBook) {
+    }
+
+    /** A legal move the user can play on the interactive board. */
+    public record LegalMove(String san, String from, String to, String promotion) {
     }
 
     public record NodeView(List<String> path, String line, String fen, boolean yourTurn, int yourGames,
-                           Double yourScore, int refGames, Double refScore, boolean inBook, List<MoveRow> moves) {
+                           Double yourScore, int refGames, Double refScore, boolean inBook, List<MoveRow> moves,
+                           String lastFrom, String lastTo, boolean check, List<LegalMove> legalMoves) {
     }
 
     /** The explorer view for any move path (the user may browse reference moves they never played). */
@@ -95,6 +100,15 @@ public final class OpeningAnalyzer {
         List<RefMove> refMoves = book.moves(key);
         int refTotal = refMoves.stream().mapToInt(m -> m.stats().games()).sum();
 
+        List<Board.Move> legal = board.legalMoves();
+        Map<String, Board.Move> legalBySan = new HashMap<>();
+        List<LegalMove> legalOut = new ArrayList<>();
+        for (Board.Move m : legal) {
+            legalBySan.put(m.san(), m);
+            legalOut.add(new LegalMove(m.san(), m.fromSquare(), m.toSquare(),
+                    m.promotion() == Board.EMPTY ? null : String.valueOf("  nbrqk".charAt(m.promotion()))));
+        }
+
         Map<String, MoveRow> rows = new LinkedHashMap<>();
         Map<String, RefMove> refBySan = new HashMap<>();
         for (RefMove m : refMoves) {
@@ -104,13 +118,17 @@ public final class OpeningAnalyzer {
             for (OpeningTrie.Node c : userNode.children()) {
                 RefMove rm = refBySan.get(c.san());
                 boolean inBook = rm != null || book.position(c.positionKey()).isPresent();
-                rows.put(c.san(), new MoveRow(c.san(), c.games(), num(c.stats().scoreFor(w)),
+                Board.Move lm = squaresOf(board, legalBySan, c.san());
+                rows.put(c.san(), new MoveRow(c.san(), lm == null ? null : lm.fromSquare(), lm == null ? null : lm.toSquare(),
+                        c.games(), num(c.stats().scoreFor(w)),
                         rm == null ? 0 : rm.stats().games(), rm == null ? null : num(rm.stats().scoreFor(w)),
                         rm == null || refTotal == 0 ? null : (double) rm.stats().games() / refTotal, inBook));
             }
         }
         for (RefMove rm : refMoves) {
-            rows.putIfAbsent(rm.san(), new MoveRow(rm.san(), 0, null, rm.stats().games(),
+            Board.Move lm = squaresOf(board, legalBySan, rm.san());
+            rows.putIfAbsent(rm.san(), new MoveRow(rm.san(), lm == null ? null : lm.fromSquare(),
+                    lm == null ? null : lm.toSquare(), 0, null, rm.stats().games(),
                     num(rm.stats().scoreFor(w)), refTotal == 0 ? null : (double) rm.stats().games() / refTotal, true));
         }
         List<MoveRow> list = new ArrayList<>(rows.values());
@@ -118,9 +136,76 @@ public final class OpeningAnalyzer {
                 .comparingInt((MoveRow r) -> -r.yourGames())
                 .thenComparingInt(r -> -r.refGames())
                 .thenComparing(MoveRow::san));
+        boolean check = board.isAttacked(findKingSquare(board), !board.whiteToMove());
         return new NodeView(clean, MoveText.format(clean), board.toFen(), board.whiteToMove() == w,
                 yours.games(), num(yours.scoreFor(w)), ref.map(Stats::games).orElse(0),
-                ref.map(s -> num(s.scoreFor(w))).orElse(null), ref.isPresent(), list);
+                ref.map(s -> num(s.scoreFor(w))).orElse(null), ref.isPresent(), list,
+                clean.isEmpty() ? null : com.openingcoach.core.chess.Squares.name(board.lastMoveFrom()),
+                clean.isEmpty() ? null : com.openingcoach.core.chess.Squares.name(board.lastMoveTo()),
+                check, legalOut);
+    }
+
+    /** From/to squares of a SAN move, via the legal-move list or (for unusual SAN spellings) a trial replay. */
+    private static Board.Move squaresOf(Board board, Map<String, Board.Move> legalBySan, String san) {
+        Board.Move m = legalBySan.get(san);
+        if (m != null) {
+            return m;
+        }
+        try {
+            Board trial = board.copy();
+            String clean = trial.applySan(san);
+            return new Board.Move(trial.lastMoveFrom(), trial.lastMoveTo(), Board.EMPTY, clean);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static int findKingSquare(Board b) {
+        int target = b.whiteToMove() ? Board.KING : -Board.KING;
+        for (int s = 0; s < 64; s++) {
+            if (b.pieceAt(s) == target) {
+                return s;
+            }
+        }
+        return 0;
+    }
+
+    // ================================================================== repertoire (top lines)
+
+    public record TopLine(List<String> path, String line, int games, double share, Double score) {
+    }
+
+    public record TopLinesResult(List<TopLine> lines, int candidates, long selectComparisons) {
+    }
+
+    /**
+     * The k most-played lines at exactly {@code depth} plies (what this player usually reaches),
+     * picked with randomized Quickselect over all trie nodes at that depth.
+     */
+    public TopLinesResult topLines(int k, int depth) {
+        if (k <= 0 || depth <= 0 || depth > rep.trie().maxPly()) {
+            throw new IllegalArgumentException("k must be positive and depth in 1.." + rep.trie().maxPly());
+        }
+        boolean w = rep.white();
+        int total = Math.max(1, rep.trie().root().games());
+        List<OpeningTrie.Node> atDepth = new ArrayList<>();
+        rep.trie().forEachNode(n -> {
+            if (n.ply() == depth && n.games() >= 2) {
+                atDepth.add(n);
+            }
+        });
+        Comparator<OpeningTrie.Node> mostPlayed = Comparator.comparingInt((OpeningTrie.Node n) -> -n.games())
+                .thenComparing(n -> MoveText.format(n.path()));
+        RandomizedSelect select = new RandomizedSelect(seed);
+        List<OpeningTrie.Node> top = select.smallestK(atDepth, Math.min(k, atDepth.size()), mostPlayed);
+        new RandomizedQuickSort(seed).sort(top, mostPlayed);
+        List<TopLine> out = new ArrayList<>();
+        for (OpeningTrie.Node n : top) {
+            List<String> p = n.path();
+            out.add(new TopLine(p, MoveText.format(p), n.games(), round((double) n.games() / total),
+                    num(n.stats().scoreFor(w))));
+        }
+        return new TopLinesResult(out, atDepth.size(), select.comparisons());
     }
 
     // ================================================================== weak lines

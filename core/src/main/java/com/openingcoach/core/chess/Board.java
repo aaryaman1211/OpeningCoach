@@ -25,8 +25,170 @@ public final class Board {
     private int epSquare = -1;
     private int halfmoveClock;
     private int fullmoveNumber = 1;
+    private int lastFrom = -1;
+    private int lastTo = -1;
 
     private Board() {
+    }
+
+    /** A legal move: squares, promotion piece type (or EMPTY) and its SAN without check marks. */
+    public record Move(int from, int to, int promotion, String san) {
+        public String fromSquare() {
+            return Squares.name(from);
+        }
+
+        public String toSquare() {
+            return Squares.name(to);
+        }
+    }
+
+    /** Source square of the last move played on this board (king's square for castling), or -1. */
+    public int lastMoveFrom() {
+        return lastFrom;
+    }
+
+    public int lastMoveTo() {
+        return lastTo;
+    }
+
+    /**
+     * All legal moves in the current position, with SAN using the standard minimal
+     * disambiguation (file, then rank, then both). Generated pseudo-legally per piece and
+     * filtered by "own king not attacked afterwards".
+     */
+    public java.util.List<Move> legalMoves() {
+        int sign = whiteToMove ? 1 : -1;
+        java.util.List<int[]> raw = new java.util.ArrayList<>(); // {from, to, promotion}
+        for (int from = 0; from < 64; from++) {
+            int p = squares[from];
+            if (p == EMPTY || (p > 0) != whiteToMove) {
+                continue;
+            }
+            int type = Math.abs(p);
+            int f = Squares.file(from), r = Squares.rank(from);
+            switch (type) {
+                case PAWN -> {
+                    int dir = sign;
+                    int lastRank = whiteToMove ? 7 : 0;
+                    int one = from + 8 * dir;
+                    if (one >= 0 && one < 64 && squares[one] == EMPTY) {
+                        addPawn(raw, from, one, lastRank);
+                        int startRank = whiteToMove ? 1 : 6;
+                        int two = from + 16 * dir;
+                        if (r == startRank && squares[two] == EMPTY) {
+                            raw.add(new int[]{from, two, EMPTY});
+                        }
+                    }
+                    for (int df : new int[]{-1, 1}) {
+                        int tf = f + df, tr = r + dir;
+                        if (!onBoard(tf, tr)) {
+                            continue;
+                        }
+                        int to = tr * 8 + tf;
+                        int t = squares[to];
+                        if ((t != EMPTY && (t > 0) != whiteToMove) || to == epSquare) {
+                            addPawn(raw, from, to, lastRank);
+                        }
+                    }
+                }
+                case KNIGHT, KING -> {
+                    for (int[] st : type == KNIGHT ? KNIGHT_STEPS : KING_STEPS) {
+                        int tf = f + st[0], tr = r + st[1];
+                        if (onBoard(tf, tr)) {
+                            int t = squares[tr * 8 + tf];
+                            if (t == EMPTY || (t > 0) != whiteToMove) {
+                                raw.add(new int[]{from, tr * 8 + tf, EMPTY});
+                            }
+                        }
+                    }
+                }
+                default -> {
+                    int[][] dirs = type == ROOK ? ROOK_DIRS : type == BISHOP ? BISHOP_DIRS : KING_STEPS;
+                    for (int[] d : dirs) {
+                        int tf = f + d[0], tr = r + d[1];
+                        while (onBoard(tf, tr)) {
+                            int t = squares[tr * 8 + tf];
+                            if (t == EMPTY || (t > 0) != whiteToMove) {
+                                raw.add(new int[]{from, tr * 8 + tf, EMPTY});
+                            }
+                            if (t != EMPTY) {
+                                break;
+                            }
+                            tf += d[0];
+                            tr += d[1];
+                        }
+                    }
+                }
+            }
+        }
+        java.util.List<int[]> legal = new java.util.ArrayList<>();
+        for (int[] m : raw) {
+            if (leavesKingSafe(m[0], m[1], m[2])) {
+                legal.add(m);
+            }
+        }
+        java.util.List<Move> out = new java.util.ArrayList<>();
+        for (int[] m : legal) {
+            out.add(new Move(m[0], m[1], m[2], sanFor(m, legal)));
+        }
+        int base = whiteToMove ? 0 : 56;
+        if (castleProblem(true) == null) {
+            out.add(new Move(base + 4, base + 6, EMPTY, "O-O"));
+        }
+        if (castleProblem(false) == null) {
+            out.add(new Move(base + 4, base + 2, EMPTY, "O-O-O"));
+        }
+        return out;
+    }
+
+    private static void addPawn(java.util.List<int[]> raw, int from, int to, int lastRank) {
+        if (Squares.rank(to) == lastRank) {
+            for (int promo : new int[]{QUEEN, ROOK, BISHOP, KNIGHT}) {
+                raw.add(new int[]{from, to, promo});
+            }
+        } else {
+            raw.add(new int[]{from, to, EMPTY});
+        }
+    }
+
+    private String sanFor(int[] m, java.util.List<int[]> legal) {
+        int from = m[0], to = m[1], promo = m[2];
+        int type = Math.abs(squares[from]);
+        boolean capture = squares[to] != EMPTY || (type == PAWN && to == epSquare);
+        StringBuilder sb = new StringBuilder();
+        if (type == PAWN) {
+            if (capture) {
+                sb.append((char) ('a' + Squares.file(from))).append('x');
+            }
+            sb.append(Squares.name(to));
+            if (promo != EMPTY) {
+                sb.append('=').append(" PNBRQK".charAt(promo));
+            }
+            return sb.toString();
+        }
+        sb.append(" PNBRQK".charAt(type));
+        boolean clash = false, sameFile = false, sameRank = false;
+        for (int[] o : legal) {
+            if (o[0] != from && o[1] == to && Math.abs(squares[o[0]]) == type) {
+                clash = true;
+                sameFile |= Squares.file(o[0]) == Squares.file(from);
+                sameRank |= Squares.rank(o[0]) == Squares.rank(from);
+            }
+        }
+        if (clash) {
+            if (!sameFile) {
+                sb.append((char) ('a' + Squares.file(from)));
+            } else if (!sameRank) {
+                sb.append((char) ('1' + Squares.rank(from)));
+            } else {
+                sb.append(Squares.name(from));
+            }
+        }
+        if (capture) {
+            sb.append('x');
+        }
+        sb.append(Squares.name(to));
+        return sb.toString();
     }
 
     public static Board startPosition() {
@@ -291,31 +453,45 @@ public final class Board {
         return king >= 0 && !trial.isAttacked(king, !whiteToMove);
     }
 
-    private void castle(boolean kingside, String rawSan) {
+    /** Why castling is not allowed right now, or null if it is legal. */
+    private String castleProblem(boolean kingside) {
         int base = whiteToMove ? 0 : 56;
         int right = whiteToMove ? (kingside ? WK_CASTLE : WQ_CASTLE) : (kingside ? BK_CASTLE : BQ_CASTLE);
         int sign = whiteToMove ? 1 : -1;
         if ((castling & right) == 0) {
-            throw new IllegalMoveException("Castling right already lost", rawSan);
+            return "Castling right already lost";
         }
         int kingFrom = base + 4;
         int rookFrom = base + (kingside ? 7 : 0);
         if (squares[kingFrom] != sign * KING || squares[rookFrom] != sign * ROOK) {
-            throw new IllegalMoveException("King or rook not on its starting square", rawSan);
+            return "King or rook not on its starting square";
         }
         int[] mustBeEmpty = kingside ? new int[]{base + 5, base + 6} : new int[]{base + 1, base + 2, base + 3};
         for (int s : mustBeEmpty) {
             if (squares[s] != EMPTY) {
-                throw new IllegalMoveException("Pieces between king and rook", rawSan);
+                return "Pieces between king and rook";
             }
         }
         int[] kingPath = kingside ? new int[]{base + 4, base + 5, base + 6} : new int[]{base + 4, base + 3, base + 2};
         for (int s : kingPath) {
             if (isAttacked(s, !whiteToMove)) {
-                throw new IllegalMoveException("Cannot castle out of, through, or into check", rawSan);
+                return "Cannot castle out of, through, or into check";
             }
         }
+        return null;
+    }
+
+    private void castle(boolean kingside, String rawSan) {
+        String problem = castleProblem(kingside);
+        if (problem != null) {
+            throw new IllegalMoveException(problem, rawSan);
+        }
+        int base = whiteToMove ? 0 : 56;
+        int kingFrom = base + 4;
+        int rookFrom = base + (kingside ? 7 : 0);
         int kingTo = base + (kingside ? 6 : 2);
+        lastFrom = kingFrom;
+        lastTo = kingTo;
         int rookTo = base + (kingside ? 5 : 3);
         squares[kingTo] = squares[kingFrom];
         squares[kingFrom] = EMPTY;
@@ -328,6 +504,8 @@ public final class Board {
     }
 
     private void makeMove(int from, int to, int promotion) {
+        lastFrom = from;
+        lastTo = to;
         int piece = squares[from];
         int captured = squares[to];
         boolean pawn = Math.abs(piece) == PAWN;

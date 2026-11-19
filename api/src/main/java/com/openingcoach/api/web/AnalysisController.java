@@ -5,6 +5,7 @@ import com.openingcoach.api.dto.Dtos.CreateAnalysisRequest;
 import com.openingcoach.api.dto.Dtos.StudyPlanRequest;
 import com.openingcoach.api.dto.Dtos.Timed;
 import com.openingcoach.api.service.AnalysisService;
+import com.openingcoach.core.analysis.Matchup;
 import com.openingcoach.core.analysis.OpeningAnalyzer;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -59,6 +60,22 @@ public class AnalysisController {
     public Timed<OpeningAnalyzer.OutOfBookResult> outOfBook(@PathVariable String id,
                                                             @RequestParam(defaultValue = "10") @Min(1) @Max(50) int k) {
         return service.outOfBook(id, k);
+    }
+
+    /** The player's most-played lines at a given depth (their repertoire). */
+    @GetMapping("/{id}/top-lines")
+    public Timed<OpeningAnalyzer.TopLinesResult> topLines(@PathVariable String id,
+                                                          @RequestParam(defaultValue = "10") @Min(1) @Max(50) int k,
+                                                          @RequestParam(defaultValue = "6") @Min(1) @Max(20) int depth) {
+        return service.topLines(id, k, depth);
+    }
+
+    /** Opponent prep: your analysis {id} against the opponent's analysis {opponentId} (opposite colours). */
+    @GetMapping("/{id}/matchup/{opponentId}")
+    public Timed<Matchup.MatchupResult> matchup(@PathVariable String id, @PathVariable String opponentId,
+                                                @RequestParam(defaultValue = "2") @Min(1) @Max(1000) int minGames,
+                                                @RequestParam(defaultValue = "8") @Min(1) @Max(30) int k) {
+        return service.matchup(id, opponentId, minGames, k);
     }
 
     @PostMapping("/{id}/study-plan")

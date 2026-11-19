@@ -1,4 +1,5 @@
-// Thin client for the Java REST API. All algorithms run on the server; this file only moves JSON.
+// Thin client for the Java REST API. All algorithms (and all chess rules) run on the server;
+// this file only moves JSON.
 
 async function request(method, path, body) {
   const res = await fetch(path, {
@@ -20,13 +21,19 @@ async function request(method, path, body) {
   return data
 }
 
+const moveParam = (moves) => encodeURIComponent(moves.join(','))
+
 export const api = {
   reference: () => request('GET', '/api/reference'),
   createAnalysis: (body) => request('POST', '/api/analyses', body),
-  tree: (id, moves) => request('GET', `/api/analyses/${id}/tree?moves=${encodeURIComponent(moves.join(','))}`),
+  tree: (id, moves) => request('GET', `/api/analyses/${id}/tree?moves=${moveParam(moves)}`),
   weakLines: (id, k = 10, minGames = 3) => request('GET', `/api/analyses/${id}/weak-lines?k=${k}&minGames=${minGames}`),
   outOfBook: (id, k = 10) => request('GET', `/api/analyses/${id}/out-of-book?k=${k}`),
   studyPlan: (id, body) => request('POST', `/api/analyses/${id}/study-plan`, body),
+  topLines: (id, k = 8, depth = 6) => request('GET', `/api/analyses/${id}/top-lines?k=${k}&depth=${depth}`),
+  matchup: (id, opponentId, minGames = 2, k = 6) =>
+    request('GET', `/api/analyses/${id}/matchup/${opponentId}?minGames=${minGames}&k=${k}`),
+  board: (moves) => request('GET', `/api/board?moves=${moveParam(moves)}`),
 }
 
 export function pct(x) {
