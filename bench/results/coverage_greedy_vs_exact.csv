@@ -1,0 +1,5 @@
+sets,elements,instances,greedy_ms,exact_ms,worst_budget_ratio,mean_budget_ratio,worst_cover_ratio,mean_cover_ratio
+10,30,50,0.183,0.3,0.857,0.976,0.811,0.970
+14,30,50,0.075,19.8,0.811,0.974,0.838,0.943
+18,30,50,0.052,13.1,0.888,0.967,0.812,0.942
+22,30,5,0.052,91.4,0.919,0.976,0.798,0.894

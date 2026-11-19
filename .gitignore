@@ -1,0 +1,11 @@
+target/
+node_modules/
+frontend/dist/
+api/src/main/resources/static/
+data/raw/
+data/index/
+bench/results/*.tmp
+.idea/
+.vscode/
+*.iml
+.DS_Store

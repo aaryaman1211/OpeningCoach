@@ -1,0 +1,4 @@
+share_out_of_book,lookups,with_bloom_probes,without_bloom_probes,with_bloom_ms,without_bloom_ms
+0.1,50000,413855,944701,306.4,714.1
+0.5,50000,240324,944483,186.3,806.9
+0.9,50000,52996,944353,48.8,825.7
