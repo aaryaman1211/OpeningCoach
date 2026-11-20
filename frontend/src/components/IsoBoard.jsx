@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 
-// Decorative isometric board for the start screen. Pieces are drawn with flat-shaded SVG shapes
-// and loop through the first moves of the Italian Game. No chess rules here: it is a fixed animation.
+const Board3D = lazy(() => import('./Board3D.jsx'))
+
+// Decorative board for the start screen, looping through the first moves of the Italian Game.
+// It uses the WebGL 3D board; the flat-shaded SVG drawing below is the fallback without WebGL.
+// No chess rules here: it is a fixed animation.
 
 const W = 66, H = 33, CX = 330, TOP = 150, FR = 14, FT = 16, S = 1.08
 const P = (i, j) => [CX + ((i - j) * W) / 2, TOP + ((i + j) * H) / 2]
@@ -115,7 +118,7 @@ function draw(svg, pieces, anim, last) {
   svg.innerHTML = s
 }
 
-export default function IsoBoard() {
+function IsoSvg() {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -171,5 +174,43 @@ export default function IsoBoard() {
 
   return (
     <svg ref={ref} className="iso" viewBox="0 0 640 500" role="img" aria-label="A 3D chess board playing the first moves of the Italian Game" />
+  )
+}
+
+// the same opening as FEN positions for the 3D board: 1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5
+const ITALIAN = [
+  ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w', null],
+  ['rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b', ['e2', 'e4']],
+  ['rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w', ['e7', 'e5']],
+  ['rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b', ['g1', 'f3']],
+  ['r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w', ['b8', 'c6']],
+  ['r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b', ['f1', 'c4']],
+  ['r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w', ['f8', 'c5']],
+]
+
+function hasWebgl() {
+  try {
+    const c = document.createElement('canvas')
+    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+export default function IsoBoard() {
+  const [ok, setOk] = useState(hasWebgl)
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (!ok || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined
+    const t = setTimeout(() => setI((n) => (n + 1) % ITALIAN.length), i === 0 ? 1600 : i === ITALIAN.length - 1 ? 2600 : 1250)
+    return () => clearTimeout(t)
+  }, [i, ok])
+  if (!ok) return <IsoSvg />
+  const [fen, mv] = ITALIAN[i]
+  return (
+    <Suspense fallback={<div className="board3d hero" />}>
+      <Board3D mode="hero" fen={fen} lastMove={mv ? { from: mv[0], to: mv[1] } : null}
+               interactive={false} showCoords={false} onFail={() => setOk(false)} />
+    </Suspense>
   )
 }

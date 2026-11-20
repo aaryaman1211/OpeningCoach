@@ -34,7 +34,8 @@ export default function App() {
   const [timings, setTimings] = useState([])
   const [changing, setChanging] = useState(false)
   const [scoutNext, setScoutNext] = useState(false)
-  const [startView, setStartView] = useState('home') // home | how | greats (before any games are loaded)
+  const [startView, setStartView] = useState('home') // home | how | greats (on the start screen)
+  const [home, setHome] = useState(false) // games are loaded but the start screen is showing
   const [online, setOnline] = useState(true)
   const [notice, setNotice] = useState('')
 
@@ -89,6 +90,7 @@ export default function App() {
     setScoutNext(false)
     setChanging(false)
     setStartView('home')
+    setHome(false)
   }
 
   async function loadOpponent(req) {
@@ -113,16 +115,17 @@ export default function App() {
   const opponent = oppPair ? oppPair[other(side)] : null
   const dark = theme === 'dark'
   const player = pair?.white.summary.player
+  const onStart = !pair || home
 
   return (
-    <div className={`app ${pair ? '' : 'is-start'}`}>
+    <div className={`app ${onStart ? 'is-start' : ''}`}>
       <header className="top">
-        <button className="logo" onClick={() => { setStartView('home'); if (pair) setTab('board') }} aria-label="OpeningCoach home">
+        <button className="logo" onClick={() => { setStartView('home'); setChanging(false); if (pair) setHome(true) }} aria-label="OpeningCoach home">
           <img src={dark ? '/pieces/wN.svg' : '/pieces/bN.svg'} alt="" />
           <span className="logo-text">Opening<span>Coach</span></span>
         </button>
         <span className="spacer" />
-        {pair ? (
+        {!onStart ? (
           <>
             <span className="player-chip">
               <span className="avatar">{player.slice(0, 1).toUpperCase()}</span>
@@ -143,6 +146,7 @@ export default function App() {
           <>
             <button className="nav-link" onClick={() => setStartView(startView === 'greats' ? 'home' : 'greats')}>{startView === 'greats' ? 'Back' : 'The greats'}</button>
             <button className="nav-link" onClick={() => setStartView(startView === 'how' ? 'home' : 'how')}>{startView === 'how' ? 'Back' : 'How it works'}</button>
+            {pair && <button className="pill-btn" onClick={() => { setHome(false); setStartView('home') }}>Back to my games</button>}
           </>
         )}
         <button className="theme-toggle" onClick={() => setTheme(dark ? 'light' : 'dark')}
@@ -158,11 +162,11 @@ export default function App() {
       {!online && <div className="banner warn" role="status">Reconnecting to the OpeningCoach server…</div>}
       {notice && online && <div className="banner" role="status">{notice}</div>}
 
-      {!pair && startView === 'home' && <StartScreen onImport={onImport} onScoutAfter={() => setScoutNext(true)} />}
-      {!pair && startView === 'how' && <main className="page"><UnderTheHood timings={timings} /></main>}
-      {!pair && startView === 'greats' && <main className="page"><Greats onTiming={onTiming} /></main>}
+      {onStart && startView === 'home' && <StartScreen onImport={onImport} onScoutAfter={() => setScoutNext(true)} />}
+      {onStart && startView === 'how' && <main className="page"><UnderTheHood timings={timings} /></main>}
+      {onStart && startView === 'greats' && <main className="page"><Greats onTiming={onTiming} /></main>}
 
-      {pair && (
+      {!onStart && (
         <main className="page">
           {changing && (
             <div style={{ maxWidth: 560, marginBottom: 20 }}>

@@ -163,5 +163,5 @@ data/      reference PGN, demo sample (index/ and raw/ are generated, not commit
 scripts/   data download and preparation
 ```
 
-This folder is named `OpeningCoach.nosync` so iCloud Drive does not sync it; an `OpeningCoach` shortcut points here.
+This folder is named `OpeningCoach.nosync` so iCloud Drive does not sync it (iCloud was removing project files from the disk).
 Use Git/GitHub as the backup.

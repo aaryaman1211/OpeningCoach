@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+
+const Board3D = lazy(() => import('./Board3D.jsx'))
 
 // Interactive, animated board. It draws positions and lets the user pick moves, but every
 // legal move comes from the Java server (legalMoves prop) - there is no chess logic here.
@@ -34,7 +36,7 @@ function fromXY(x, y, orientation) {
 }
 
 /** Keep piece identities across positions so moved pieces slide instead of blinking. */
-function diffPieces(prev, placement) {
+export function diffPieces(prev, placement) {
   const used = new Set()
   const result = []
   const pending = []
@@ -69,7 +71,7 @@ function pieceImg(p) {
   return `/pieces/${p === p.toUpperCase() ? 'w' : 'b'}${p.toUpperCase()}.svg`
 }
 
-export default function ChessBoard({
+function FlatBoard({
   fen,
   orientation = 'white',
   lastMove = null,
@@ -395,5 +397,26 @@ export default function ChessBoard({
         <img className="drag-ghost" src={pieceImg(drag.p)} alt="" style={{ left: drag.x, top: drag.y }} />
       )}
     </div>
+  )
+}
+
+function webglAvailable() {
+  try {
+    const c = document.createElement('canvas')
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')))
+  } catch {
+    return false
+  }
+}
+const HAS_WEBGL = typeof document !== 'undefined' && webglAvailable()
+
+/** tilt > 0 draws real 3D pieces with WebGL; the CSS-tilted flat board is the fallback without it */
+export default function ChessBoard(props) {
+  const [failed, setFailed] = useState(false)
+  if (!(props.tilt > 0) || !HAS_WEBGL || failed) return <FlatBoard {...props} />
+  return (
+    <Suspense fallback={<div className="board3d board" />}>
+      <Board3D {...props} onFail={() => setFailed(true)} />
+    </Suspense>
   )
 }

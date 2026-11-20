@@ -12,5 +12,6 @@ export default defineConfig({
   build: {
     outDir: '../api/src/main/resources/static',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600, // three.js, loaded only when a 3D board is shown
   },
 })
