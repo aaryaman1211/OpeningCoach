@@ -7,7 +7,7 @@ import { diffPieces, parseFen } from './ChessBoard.jsx'
 // A real 3D board (WebGL, three.js). Same props as ChessBoard. Like the flat board it has no chess
 // logic: legal moves come from the Java server in `legalMoves`.
 //   mode="board": camera behind the player's side, looking down at the board
-//   mode="hero":  decorative corner view for the start screen, slowly drifting
+//   mode="hero":  decorative isometric view for the start screen (orthographic camera)
 
 const FILES = 'abcdefgh'
 const BORDER = 0.62
@@ -41,14 +41,15 @@ function boardTexture(orientation, showCoords) {
   c.width = c.height = Math.round(SIZE * px)
   const g = c.getContext('2d')
   const wood = g.createLinearGradient(0, 0, c.width, c.height)
-  wood.addColorStop(0, '#9a7552')
-  wood.addColorStop(1, '#84613f')
+  wood.addColorStop(0, '#24211f')
+  wood.addColorStop(1, '#171514')
   g.fillStyle = wood
   g.fillRect(0, 0, c.width, c.height)
   const o = BORDER * px
-  const light = cssVar('--sq-light', '#f2e8d5')
-  const dark = cssVar('--sq-dark', '#c29a72')
-  g.fillStyle = 'rgba(0,0,0,0.25)'
+  // the 3D boards use the site's colours: orange and near-black
+  const light = cssVar('--sq3-light', '#d85a30')
+  const dark = cssVar('--sq3-dark', '#2c2826')
+  g.fillStyle = 'rgba(216,90,48,0.55)'
   g.fillRect(o - 6, o - 6, 8 * px + 12, 8 * px + 12)
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
@@ -58,7 +59,7 @@ function boardTexture(orientation, showCoords) {
     }
   }
   if (showCoords) {
-    g.fillStyle = '#f2e8d5'
+    g.fillStyle = '#f0997b'
     g.font = `600 ${Math.round(px * 0.3)}px system-ui, sans-serif`
     g.textAlign = 'center'
     g.textBaseline = 'middle'
@@ -140,7 +141,7 @@ function createEngine(container, getProps, onPromotion) {
   const pmrem = new THREE.PMREMGenerator(renderer)
   const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
   scene.environment = env
-  scene.environmentIntensity = 0.55
+  scene.environmentIntensity = 0.35
 
   scene.add(new THREE.HemisphereLight(0xfff4e6, 0x5a4532, 0.9))
   const sun = new THREE.DirectionalLight(0xffffff, 2.2)
@@ -152,11 +153,11 @@ function createEngine(container, getProps, onPromotion) {
   sun.shadow.normalBias = 0.02
   scene.add(sun)
 
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
   const mode = getProps().mode
+  const camera = mode === 'hero' ? new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100) : new THREE.PerspectiveCamera(30, 1, 0.1, 100)
 
   // board: wooden block with the squares painted on top
-  const woodSide = new THREE.MeshStandardMaterial({ color: 0x6e4f35, roughness: 0.6 })
+  const woodSide = new THREE.MeshStandardMaterial({ color: 0x1c1a18, roughness: 0.7 })
   const top = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0 })
   const block = new THREE.Mesh(new THREE.BoxGeometry(SIZE, 0.4, SIZE), [woodSide, woodSide, top, woodSide, woodSide, woodSide])
   block.position.y = -0.2
@@ -206,8 +207,8 @@ function createEngine(container, getProps, onPromotion) {
 
   function readColors() {
     st.colors = {
-      last: cssColor(cssVar('--sq-last', 'rgba(223,163,122,0.55)')),
-      sel: cssColor(cssVar('--sq-sel', 'rgba(196,83,43,0.35)')),
+      last: { color: new THREE.Color('#ffe7b8'), alpha: 0.32 },
+      sel: { color: new THREE.Color('#fff3d6'), alpha: 0.45 },
       ref: cssColor(cssVar('--arrow-ref', '#3b7a4f')),
       you: cssColor(cssVar('--arrow-you', '#2f5f9e')),
       them: cssColor(cssVar('--arrow-them', '#c4532b')),
@@ -238,13 +239,25 @@ function createEngine(container, getProps, onPromotion) {
   function view() {
     const { orientation, tilt } = getProps()
     const base = orientation === 'black' ? Math.PI : 0
-    if (mode === 'hero') {
-      const drift = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : Math.sin((performance.now() - st.t0) / 9000) * 0.12
-      return { az: base + 0.72 + drift, el: (33 * Math.PI) / 180 }
-    }
+    // classic 2:1 isometric, seen from the h1 corner like the original drawing
+    if (mode === 'hero') return { az: base + Math.PI / 4, el: Math.PI / 6 }
     return { az: base, el: ((90 - (tilt || 36) * 0.95) * Math.PI) / 180 }
   }
+  function fitOrtho() {
+    // same scale and placement as the original 640x500 SVG drawing: a square is 66 px wide,
+    // and the board centre sits at (375, 282), a little right of the drawing so it clears the text
+    const { az, el } = view()
+    target.set(0, 0, 0)
+    placeCamera(az, el, 30)
+    const u = Math.SQRT2 / 66
+    const sx = 640 / (st.h * (640 / 500)) * (st.w / 640) // keeps the drawing's proportions if the box is not 640:500
+    Object.assign(camera, { left: -375 * u * sx, right: 265 * u * sx, top: 282 * u, bottom: -218 * u })
+    camera.updateProjectionMatrix()
+    st.radius = 30
+    st.dirty = true
+  }
   function fitCamera() {
+    if (mode === 'hero') return fitOrtho()
     camera.aspect = st.w / st.h
     camera.updateProjectionMatrix()
     const { az, el } = view()
@@ -253,7 +266,7 @@ function createEngine(container, getProps, onPromotion) {
     for (const x of [-h, h]) for (const z of [-h, h]) for (const y of [-0.4, mode === 'hero' ? 1.1 : 0.9]) pts.push(new THREE.Vector3(x, y, z))
     target.set(0, 0, 0)
     let r = 22
-    const margin = mode === 'hero' ? 0.84 : 0.97
+    const margin = 0.97
     for (let i = 0; i < 6; i++) {
       placeCamera(az, el, r)
       camera.updateMatrixWorld()
@@ -334,6 +347,9 @@ function createEngine(container, getProps, onPromotion) {
     st.committedFen = null
     onPromotion(null)
     updateMarks()
+    // the headline landed before this board had loaded: jump now instead
+    const imp = window.__ocImpact
+    if (firstTime && mode === 'hero' && imp && !imp.seen) onImpact()
   }
 
   // ---------------------------------------------------------------- marks and arrows
@@ -567,11 +583,7 @@ function createEngine(container, getProps, onPromotion) {
   function tick(now) {
     st.raf = requestAnimationFrame(tick)
     if (!st.visible) return
-    let busy = mode === 'hero'
-    if (busy) {
-      const { az, el } = view()
-      placeCamera(az, el, st.radius)
-    }
+    let busy = false
     for (const [id, obj] of st.objs) {
       const g = obj.group
       if (obj.dying) {
@@ -588,6 +600,25 @@ function createEngine(container, getProps, onPromotion) {
         const k = Math.min(1, (now - obj.grow) / 260)
         g.scale.setScalar(Math.max(0.01, ease(k)))
         if (k >= 1) obj.grow = 0
+        busy = true
+      }
+      if (obj.shake) {
+        // impact wobble: a decaying rattle, later for pieces farther from the hit
+        const k = (now - obj.shake.t0) / 760
+        if (k >= 1) {
+          obj.shake = null
+          g.rotation.x = 0
+          g.rotation.z = 0
+          if (!obj.from) g.position.y = 0
+        } else if (k > 0) {
+          const d = (1 - k) * (1 - k) * obj.shake.amp
+          // one small hop with a slight rattle
+          // a jump and a smaller bounce, with a slight tilt while in the air
+          const air = Math.abs(Math.sin(k * Math.PI * 2))
+          g.rotation.x = Math.sin(k * 30 + obj.shake.ph) * 0.07 * d * air
+          g.rotation.z = Math.cos(k * 26 + obj.shake.ph) * 0.09 * d * air
+          if (!obj.from) g.position.y = air * 0.42 * Math.pow(1 - k, 1.4) * obj.shake.amp
+        }
         busy = true
       }
       if (obj.from) {
@@ -607,6 +638,18 @@ function createEngine(container, getProps, onPromotion) {
       st.dirty = false
     }
   }
+
+  // the start screen's headline lands on the page: every piece hops a little, the nearest first
+  const onImpact = () => {
+    if (window.__ocImpact) window.__ocImpact.seen = true
+    const now = performance.now()
+    for (const obj of st.objs.values()) {
+      if (obj.dying) continue
+      const dist = Math.hypot(obj.group.position.x + 4.5, obj.group.position.z - 4.5)
+      obj.shake = { t0: now + dist * 18, amp: 1 - Math.min(0.4, dist * 0.04), ph: Math.random() * 6 }
+    }
+  }
+  if (mode === 'hero') window.addEventListener('oc-impact', onImpact)
 
   const ro = new ResizeObserver(resize)
   ro.observe(container)
@@ -639,6 +682,7 @@ function createEngine(container, getProps, onPromotion) {
     },
     dispose() {
       cancelAnimationFrame(st.raf)
+      window.removeEventListener('oc-impact', onImpact)
       ro.disconnect()
       io.disconnect()
       mo.disconnect()
@@ -701,7 +745,7 @@ export default function Board3D(props) {
 
   const sideToMove = fen.split(' ')[1] || 'w'
   return (
-    <div className={`board3d ${mode}`} ref={holder} role={mode === 'hero' ? undefined : 'application'}
+    <div className={`board3d ${mode === 'hero' ? 'iso3d' : mode}`} ref={holder} role={mode === 'hero' ? undefined : 'application'}
          aria-label={mode === 'hero' ? undefined : 'Chess board (3D)'}>
       {promotion && (
         <div className="promo3d" onPointerDown={(e) => e.stopPropagation()}>

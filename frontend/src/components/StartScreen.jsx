@@ -1,5 +1,41 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import IsoBoard from './IsoBoard.jsx'
+
+// Headline intro: the two lines drop in 3D, one after the other, and slam into the page; the page shakes and the board's pieces jump.
+// two waves: the top line drops, then the orange line slams down after it
+const LINES = [['Don’t let your opening', false], ['checkmate you.', true]]
+const IMPACT_MS = 930 // the moment the second line hits
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+function useImpact() {
+  const [impact, setImpact] = useState(false)
+  useEffect(() => {
+    if (reducedMotion()) return undefined
+    const t = setTimeout(() => {
+      setImpact(true)
+      // remembered too, so a 3D board that finishes loading after the landing still reacts
+      window.__ocImpact = { at: performance.now(), seen: false }
+      window.dispatchEvent(new CustomEvent('oc-impact'))
+    }, IMPACT_MS)
+    return () => clearTimeout(t)
+  }, [])
+  return impact
+}
+
+function FallingHeadline() {
+  return (
+    <div className="headline-wrap">
+      <h1 className="headline drop" aria-label="Don’t let your opening checkmate you.">
+        {LINES.map(([text, accent], i) => (
+          <span key={i} aria-hidden="true" className={`w ${accent ? 'accent' : ''}`}
+                style={{ animationDelay: `${0.1 + i * 0.4}s`, '--rz': `${i ? 3 : -4}deg` }}>
+            {text}
+          </span>
+        ))}
+      </h1>
+    </div>
+  )
+}
 
 function greeting() {
   const h = new Date().getHours()
@@ -21,6 +57,7 @@ export default function StartScreen({ onImport, onScoutAfter }) {
   const [note, setNote] = useState('')
   const fileInput = useRef(null)
   const nameInput = useRef(null)
+  const impact = useImpact()
 
   async function run(req, which) {
     setError('')
@@ -66,15 +103,13 @@ export default function StartScreen({ onImport, onScoutAfter }) {
   }
 
   return (
-    <section className="hero">
+    <section className={`hero ${impact ? 'impact' : ''}`}>
       <div className="hero-disc" aria-hidden="true" />
       <div className="hero-board" aria-hidden="true"><IsoBoard /></div>
 
       <div className="hero-copy">
         <p className="kicker">{greeting()}</p>
-        <h1 className="headline">
-          Don’t let your opening <span>checkmate you.</span>
-        </h1>
+        <FallingHeadline />
         <p className="lede">We check every move you make, so you never get rook’d before move ten.</p>
       </div>
 

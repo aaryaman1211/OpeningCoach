@@ -208,7 +208,7 @@ export default function IsoBoard() {
   if (!ok) return <IsoSvg />
   const [fen, mv] = ITALIAN[i]
   return (
-    <Suspense fallback={<div className="board3d hero" />}>
+    <Suspense fallback={<div className="board3d iso3d" />}>
       <Board3D mode="hero" fen={fen} lastMove={mv ? { from: mv[0], to: mv[1] } : null}
                interactive={false} showCoords={false} onFail={() => setOk(false)} />
     </Suspense>

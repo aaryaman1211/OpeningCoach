@@ -18,6 +18,8 @@
   --bad: #b2463b;
   --sq-light: #f2e8d5;
   --sq-dark: #c29a72;
+  --sq3-light: #d85a30;
+  --sq3-dark: #2c2826;
   --sq-last: rgba(223, 163, 122, 0.55);
   --sq-sel: rgba(196, 83, 43, 0.35);
   --arrow-ref: #3b7a4f;
@@ -312,7 +314,7 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 /* ------------------------------------------------------------ responsive */
 @media (max-width: 960px) {
   .hero { min-height: 0; }
-  .hero-board { left: 0; top: 230px; width: 100vw; }
+  .hero-board { left: -7vw; top: 230px; width: 100vw; }
   .hero-disc { left: 25%; top: 230px; width: 90vw; height: 90vw; }
   .hero-cta { margin-top: 62vw; }
   .split, .boardview, .two-col { grid-template-columns: 1fr; }
@@ -323,7 +325,7 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
   .logo { font-size: 19px; }
   .hero { min-height: 0; }
   .hero-disc { display: none; }
-  .hero-board { position: relative; left: -24%; top: auto; width: 148%; margin: -56px 0 -44px; }
+  .hero-board { position: relative; left: -34%; top: auto; width: 148%; margin: -56px 0 -44px; }
   .hero-cta { margin-top: 18px; }
   .app { padding: 0 16px 40px; }
   .position-summary { grid-template-columns: 1fr; }
@@ -500,7 +502,35 @@ details.how summary { font-weight: 600; }
 /* ================================================================ WebGL 3D board */
 .board3d { position: relative; width: 100%; user-select: none; touch-action: none; }
 .board3d.board { aspect-ratio: 1 / 0.86; }
-.board3d.hero { aspect-ratio: 640 / 500; }
-.board3d canvas { display: block; outline: none; }
+.board3d.iso3d { aspect-ratio: 640 / 500; }
+.board3d canvas { position: absolute; inset: 0; display: block; outline: none; }
 .promo3d { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 6px; padding: 8px; border-radius: 14px; background: var(--surface); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); z-index: 5; }
 .promo3d button { width: 56px; height: 56px; border-radius: 10px; border: 1px solid var(--line); background: var(--subtle) center / 80% no-repeat; }
+
+/* ================================================================ falling headline intro */
+.headline-wrap { position: relative; }
+.headline.drop { perspective: 900px; }
+.headline.drop .w { display: block; transform-origin: 30% 100%; animation: word-drop 0.62s both;
+  /* volume: the letters are extruded with stacked shadows (their sides), plus a soft drop shadow */
+  -webkit-text-stroke: 0; text-shadow: 1px 1px 0 var(--ext-ink), 2px 2px 0 var(--ext-ink), 3px 3px 0 var(--ext-ink), 4px 4px 0 var(--ext-ink), 5px 5px 0 var(--ext-ink), 6px 6px 0 var(--ext-ink), 7px 7px 0 var(--ext-ink), 10px 14px 18px rgba(0, 0, 0, 0.22); }
+.headline.drop .w.accent { color: var(--accent); text-shadow: 1px 1px 0 var(--ext-accent), 2px 2px 0 var(--ext-accent), 3px 3px 0 var(--ext-accent), 4px 4px 0 var(--ext-accent), 5px 5px 0 var(--ext-accent), 6px 6px 0 var(--ext-accent), 7px 7px 0 var(--ext-accent), 10px 14px 18px rgba(0, 0, 0, 0.22); }
+.headline.drop .w:not(.accent) { color: inherit; }
+:root { --ext-ink: #a29d93; --ext-accent: #8a3519; }
+:root[data-theme='dark'] { --ext-ink: #6f6c65; --ext-accent: #96401f; }
+@keyframes word-drop {
+  0% { transform: translate3d(0, -115vh, 0) rotateX(-80deg) rotateZ(var(--rz)); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  68% { transform: translate3d(0, 0, 0) rotateX(0) rotateZ(0) scale(1.06, 0.78); animation-timing-function: ease-out; }
+  82% { transform: translate3d(0, -10px, 0) scale(0.97, 1.06); }
+  100% { transform: none; }
+}
+.hero.impact { animation: quake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+@keyframes quake {
+  10%, 90% { transform: translate3d(-2px, 1px, 0); }
+  20%, 80% { transform: translate3d(4px, -2px, 0); }
+  30%, 50%, 70% { transform: translate3d(-7px, 3px, 0); }
+  40%, 60% { transform: translate3d(7px, -2px, 0); }
+}
+.hero .lede, .hero .hero-cta { animation: rise 0.45s 1.3s both; }
+@media (prefers-reduced-motion: reduce) {
+  .headline.drop .w, .hero.impact, .hero .lede, .hero .hero-cta { animation: none; }
+}

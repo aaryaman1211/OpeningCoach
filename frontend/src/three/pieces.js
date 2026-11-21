@@ -128,8 +128,8 @@ export function pieceGeometries() {
 
 export function pieceMaterials() {
   return {
-    w: new THREE.MeshPhysicalMaterial({ color: 0xe6dac4, roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.25, sheen: 0.3 }),
-    b: new THREE.MeshPhysicalMaterial({ color: 0x2b2724, roughness: 0.32, clearcoat: 0.8, clearcoatRoughness: 0.2 }),
+    w: new THREE.MeshPhysicalMaterial({ color: 0xe6dac4, roughness: 0.68, clearcoat: 0.08, clearcoatRoughness: 0.6 }),
+    b: new THREE.MeshPhysicalMaterial({ color: 0x2f2b28, roughness: 0.62, clearcoat: 0.1, clearcoatRoughness: 0.6 }),
   }
 }
 
