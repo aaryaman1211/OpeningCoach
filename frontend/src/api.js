@@ -107,6 +107,9 @@ export const api = {
   matchup: (id, opponentId, minGames = 2, k = 6) =>
     request('GET', `/api/analyses/${id}/matchup/${opponentId}?minGames=${minGames}&k=${k}`),
   board: (moves) => request('GET', `/api/board?moves=${moveParam(moves)}`),
+  playPosition: (moves) => request('GET', `/api/play/position?moves=${moveParam(moves)}`),
+  playOpponent: (body) => request('POST', '/api/play/opponent', body),
+  playReview: (moves, move) => request('POST', '/api/play/review', { moves, move }),
 }
 
 export function pct(x) {

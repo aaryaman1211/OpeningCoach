@@ -17,6 +17,13 @@ players rated 1700+. It then shows:
 - **The greats**: ten great players. Famous games (Carlsen, Kasparov, Fischer, Morphy, Anderssen, Réti, Ed. Lasker)
   replay on the 3D board with a jump to the decisive move; current stars (Nakamura, Gukesh, Caruana) load live from
   Chess.com with their best recent wins and opening trees.
+- **Play the greats**: play a full game against any of them on Easy, Medium or Hard. Their replies come from the
+  reference games, chosen by win % for their side (Easy: any move strong players tried, weighted by popularity;
+  Medium: favours high scorers with some variety; Hard: the best-scoring well-tested move); in their famous game's
+  opening they replay their own moves. Once the data runs out, a hand-written alpha-beta search takes over
+  (`core/play/Engine`). After each of your moves a coach (`core/play/MoveCoach`) grades it from the data and a
+  3-ply search, points out pieces it leaves loose or a mate it allows, and on a weak move lets you take it back.
+  It gives hints (the idea, then the piece, then the area of the board) but never the move itself.
 - **Under the hood**: Bloom filter parameters, live lookup counters and server timings.
 
 CIA 3 Advanced Algorithm project. All assessed algorithms are hand-written in Java in `core/` (no Spring imports there).
@@ -54,7 +61,7 @@ Manual steps, if you prefer:
 
 ```bash
 cd frontend && npm install && npm run build && cd ..   # writes the UI into api/src/main/resources/static
-mvn install                                           # builds and runs the 78 tests
+mvn install                                           # builds and runs the 91 tests
 java -jar api/target/openingcoach-api-1.0.0.jar
 ```
 
@@ -88,6 +95,9 @@ Note that the demo file mixes many real players' games under one name. It is a t
 | GET | `/api/analyses/{id}/top-lines?k=8&depth=6` | most-played lines at a depth |
 | GET | `/api/analyses/{id}/matchup/{opponentId}?minGames=2&k=6` | weapons, dangers, predicted game (opposite colours) |
 | GET | `/api/board?moves=e4,e5,Nf3` | replays a line: from/to squares and position for each ply |
+| GET | `/api/play/position?moves=e4,e5` | position, legal moves and game status (checkmate, stalemate, fifty-move rule, repetition) |
+| POST | `/api/play/opponent` | `{moves, level, signature?}` → the opponent's reply, its source (book / engine / signature) and why |
+| POST | `/api/play/review` | `{moves, move}` → grade of your move, facts, and hints that do not name the better move |
 | GET | `/api/reference` | Bloom filter and index statistics |
 
 Errors are RFC 9457 `application/problem+json` with a readable `detail`. Examples:
@@ -103,7 +113,7 @@ curl -s -X POST localhost:8080/api/analyses -H 'Content-Type: application/json' 
 
 ## Tests
 
-`mvn test` runs 78 tests:
+`mvn test` runs 91 tests:
 
 | Class | Tests | Highlights |
 |---|---|---|
@@ -118,6 +128,8 @@ curl -s -X POST localhost:8080/api/analyses -H 'Content-Type: application/json' 
 | `CoverageSolverTest` | 8 | a case where greedy is suboptimal (within H(d)), the best-single-set rescue, 300 random instances vs brute force respecting both bounds, uncoverable elements |
 | `ReferenceIndexTest` | 5 | disk lookups equal brute-force counts, Bloom gate never changes answers, observed FPP |
 | `OpeningAnalyzerTest` | 7 | the weak line found, theory exit and alternative, explorer merge, study plan budget, empty player |
+| `EngineTest` | 6 | mate in one, wins a hanging queen, refuses a poisoned pawn, ranks every move best first, no legal moves (mate, stalemate), time budget |
+| `PlayTest` | 7 | Hard always picks the best-scoring book move, Easy varies, Medium prefers high scorers, engine takes over out of book, coach grading, main lines not marked down on statistics, hints never name the move, hanging queen and allowed mate |
 | `AnalysisApiTest` | 2 | full workflow through HTTP, validation and error responses |
 
 The chess replay was also stress-tested on all 121,114 full-length games of the January 2013 database with zero failures.

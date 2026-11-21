@@ -3,6 +3,7 @@ import { api } from '../api.js'
 import Explorer from './Explorer.jsx'
 import LineReplay from './LineReplay.jsx'
 import PageHeader from './PageHeader.jsx'
+import PlayGreat from './PlayGreat.jsx'
 
 // Famous games are stored as move lists only; the server replays and checks every move.
 // Each one was verified to replay legally to its known final move.
@@ -100,6 +101,7 @@ export default function Greats({ onTiming }) {
   const [liveGame, setLiveGame] = useState(null) // a chosen online win to replay
   const [exploring, setExploring] = useState(null) // { id, colour }
   const [explorePath, setExplorePath] = useState([])
+  const [playing, setPlaying] = useState(false)
   const jump = useRef(null)
   const g = GREATS.find((x) => x.id === selected)
   const L = live[selected]
@@ -108,6 +110,7 @@ export default function Greats({ onTiming }) {
   function pick(id) {
     if (window.innerWidth < 960) setTimeout(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
     setSelected(id)
+    setPlaying(false)
     setLiveGame(null)
     setExploring(null)
     setExplorePath([])
@@ -159,6 +162,11 @@ export default function Greats({ onTiming }) {
         ))}
       </div>
 
+      {playing ? (
+        <section className="great-detail play" key={`play-${selected}`} ref={detailRef}>
+          <PlayGreat great={g} onExit={() => setPlaying(false)} onTiming={onTiming} />
+        </section>
+      ) : (
       <section className="great-detail" key={selected} ref={detailRef}>
         <div className="great-board">
           {shown ? (
@@ -192,6 +200,7 @@ export default function Greats({ onTiming }) {
           <span className="kicker">{g.era}</span>
           <h2 className="great-name">{g.name}</h2>
           <p className="great-fact">{g.fact}</p>
+          <button className="primary play-btn" onClick={() => setPlaying(true)}>Play a game against {g.name.split(' ')[0]}</button>
 
           {shown && (
             <div className="game-card">
@@ -244,8 +253,9 @@ export default function Greats({ onTiming }) {
           )}
         </div>
       </section>
+      )}
 
-      {exploring && L?.pair && (
+      {exploring && L?.pair && !playing && (
         <section className="great-explore">
           <Explorer key={exploring.colour} analysis={L.pair[exploring.colour]} path={explorePath} setPath={setExplorePath}
                     onTiming={onTiming} who="them" name={g.name.split(' ')[0]} />

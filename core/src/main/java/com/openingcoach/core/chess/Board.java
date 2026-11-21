@@ -262,6 +262,32 @@ public final class Board {
         return squares[square];
     }
 
+    /**
+     * The position after a move taken from {@link #legalMoves()} on this board; this board is
+     * unchanged. Faster than {@link #applySan} because nothing is parsed or re-validated, which
+     * matters inside the game-tree search.
+     */
+    public Board after(Move m) {
+        Board b = copy();
+        if (m.san().equals("O-O") || m.san().equals("O-O-O")) {
+            b.castle(m.san().equals("O-O"), m.san());
+        } else {
+            b.makeMove(m.from(), m.to(), m.promotion());
+        }
+        return b;
+    }
+
+    /** True if the side to move is in check. */
+    public boolean inCheck() {
+        int king = findKing(whiteToMove);
+        return king >= 0 && isAttacked(king, !whiteToMove);
+    }
+
+    /** Half-moves since the last capture or pawn move (for the fifty-move rule). */
+    public int halfmoveClock() {
+        return halfmoveClock;
+    }
+
     public boolean whiteToMove() {
         return whiteToMove;
     }
